@@ -7,6 +7,7 @@ export const config = {
   port: parseInt(process.env.PORT || '3000'),
   host: process.env.HOST || '0.0.0.0',
   isDev: process.env.NODE_ENV === 'development',
+  appUrl: process.env.APP_URL || '',
 
   // MongoDB
   mongodb: {

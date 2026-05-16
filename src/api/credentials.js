@@ -1,5 +1,17 @@
 import { validateJWT } from '../middleware/jwt.js';
 import { generateCredential, listCredentials, revokeCredential } from '../services/credentials.js';
+import { UserModel } from '../db/models/User.js';
+
+async function assertVerified(request, reply) {
+  const plan = request.user?.plan;
+  if (plan === 'admin' || plan === 'enterprise') return true;
+  const user = await UserModel.findById(request.user.id);
+  if (!user?.email_verified) {
+    reply.code(403).send({ error: 'email_not_verified', message: 'Please verify your email address before creating API credentials.' });
+    return false;
+  }
+  return true;
+}
 
 export async function registerCredentialRoutes(fastify) {
   // GET /api/v1/credentials
@@ -26,6 +38,8 @@ export async function registerCredentialRoutes(fastify) {
     try {
       await validateJWT(request, reply);
       if (!request.user) return; // Auth failed
+
+      if (!await assertVerified(request, reply)) return;
 
       const { name, expires_in_days } = request.body;
 

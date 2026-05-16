@@ -1,10 +1,15 @@
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import { createRequire } from 'module';
+const _require = createRequire(import.meta.url);
+const disposableDomains = _require('disposable-email-domains');
 import { UserModel } from '../db/models/User.js';
 import { BucketModel } from '../db/models/Bucket.js';
 import { StorageNodeModel } from '../db/models/StorageNode.js';
 import { QuotaModel } from '../db/models/Quota.js';
 import { createBucketInMinIO } from './files.js';
+import { sendVerificationEmail } from './email.js';
 import { config } from '../config.js';
 
 /**
@@ -56,6 +61,14 @@ export function verifyToken(token) {
  * Register a new user
  */
 export async function registerUser(email, password, companyName) {
+  // Block disposable/temporary email providers
+  const domain = email.split('@')[1]?.toLowerCase();
+  if (disposableDomains.includes(domain)) {
+    const error = new Error('Disposable email addresses are not allowed. Please use a permanent email.');
+    error.statusCode = 400;
+    throw error;
+  }
+
   // Check if user already exists
   const existing = await UserModel.findByEmail(email);
   if (existing) {
@@ -74,13 +87,31 @@ export async function registerUser(email, password, companyName) {
   // Hash password
   const passwordHash = await hashPassword(password);
 
+  // Generate email verification token
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
   // Create user
   const user = await UserModel.create({
     email,
     password_hash: passwordHash,
     company_name: companyName,
     plan: 'free',
+    email_verified: false,
+    verification_token: verificationToken,
+    verification_token_expires: verificationExpires,
   });
+
+  // Send verification email (non-fatal)
+  try {
+    const baseUrl = config.appUrl || `http://localhost:${config.port}`;
+    await sendVerificationEmail({
+      to: email,
+      verifyUrl: `${baseUrl}/verify-email?token=${verificationToken}`,
+    });
+  } catch (e) {
+    console.warn('Verification email failed (non-fatal):', e.message);
+  }
 
   // Auto-provision bucket — all accounts get one on signup
   try {

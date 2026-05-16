@@ -108,6 +108,48 @@ function invoiceEmailHtml({ invoice, hiveAccount }) {
 </html>`;
 }
 
+export async function sendVerificationEmail({ to, verifyUrl }) {
+  const t = transport();
+  if (!t) {
+    console.warn('Email not configured — skipping verification email to', to);
+    return { skipped: true };
+  }
+
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0f0d0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:520px;margin:40px auto;padding:0 20px;">
+    <div style="margin-bottom:28px;">
+      <span style="font-size:18px;font-weight:700;color:#e8dcc8;">Butter</span><span style="font-size:18px;font-weight:700;color:#d4a827;">Cloud</span>
+    </div>
+    <div style="background:#16130e;border:1px solid #2a2418;border-radius:12px;padding:28px;">
+      <h1 style="margin:0 0 12px;font-size:20px;font-weight:600;color:#e8dcc8;">Verify your email</h1>
+      <p style="margin:0 0 24px;font-size:14px;color:#a89880;line-height:1.6;">
+        Click the button below to verify your email address and activate your ButterCloud account.
+      </p>
+      <a href="${verifyUrl}" style="display:inline-block;padding:12px 24px;background:#d4a827;color:#0f0d0a;font-weight:600;font-size:14px;border-radius:8px;text-decoration:none;">
+        Verify Email
+      </a>
+      <p style="margin:20px 0 0;font-size:12px;color:#7a6e5a;">
+        Link expires in 24 hours. If you didn't create an account, you can ignore this email.
+      </p>
+    </div>
+    <p style="margin:20px 0 0;font-size:11px;color:#4a4030;text-align:center;">ButterCloud</p>
+  </div>
+</body>
+</html>`;
+
+  await t.sendMail({
+    from: `"ButterCloud" <${config.smtp.from}>`,
+    to,
+    subject: 'Verify your ButterCloud email',
+    html,
+  });
+
+  return { sent: true };
+}
+
 export async function sendInvoiceEmail({ to, invoice, hiveAccount }) {
   const t = transport();
   if (!t) {

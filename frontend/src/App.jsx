@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
+import VerifyEmail from './pages/auth/VerifyEmail';
 import Dashboard from './pages/customer/Dashboard';
 import Files from './pages/customer/Files';
 import Keys from './pages/customer/Keys';
@@ -28,8 +29,9 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login"   element={<Login />} />
-          <Route path="/signup"  element={<Signup />} />
+          <Route path="/login"        element={<Login />} />
+          <Route path="/signup"       element={<Signup />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           <Route path="/"        element={<P><Dashboard /></P>} />
           <Route path="/files"   element={<P><Files /></P>} />

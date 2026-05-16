@@ -1,7 +1,18 @@
 import { BucketModel } from '../db/models/Bucket.js';
+import { UserModel } from '../db/models/User.js';
 import { UsageMetricModel } from '../db/models/UsageMetric.js';
 import { trackUsageAsync } from '../services/usage.js';
 import { listFiles, downloadFile, uploadFile, deleteFile, statFile } from '../services/files.js';
+
+async function assertVerified(user, reply) {
+  if (user.plan === 'admin' || user.plan === 'enterprise') return true;
+  const dbUser = await UserModel.findById(user.id);
+  if (!dbUser?.email_verified) {
+    reply.code(403).send({ error: 'email_not_verified', message: 'Please verify your email address before uploading files.' });
+    return false;
+  }
+  return true;
+}
 
 export async function registerFileRoutes(fastify) {
   // GET /api/v1/files?prefix=folder/ - list files in bucket
@@ -56,6 +67,7 @@ export async function registerFileRoutes(fastify) {
   fastify.post('/api/v1/files/upload', async (request, reply) => {
     try {
       const user = request.user;
+      if (!await assertVerified(user, reply)) return;
 
       const bucket = await BucketModel.findByUserId(user.id);
       if (!bucket) {

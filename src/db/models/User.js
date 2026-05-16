@@ -13,6 +13,9 @@ export class UserModel {
       updated_at: new Date(),
       active: true,
       deleted_at: null,
+      email_verified: data.email_verified || false,
+      verification_token: data.verification_token || null,
+      verification_token_expires: data.verification_token_expires || null,
     };
 
     await users().insertOne(user);
@@ -25,6 +28,10 @@ export class UserModel {
 
   static async findByEmail(email) {
     return users().findOne({ email: email.toLowerCase(), deleted_at: null });
+  }
+
+  static async findByVerificationToken(token) {
+    return users().findOne({ verification_token: token, deleted_at: null });
   }
 
   static async update(userId, data) {
