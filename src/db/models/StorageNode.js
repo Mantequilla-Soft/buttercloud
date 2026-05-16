@@ -75,7 +75,7 @@ export class StorageNodeModel {
   }
 
   static async getLeastUsedNode(region = 'default') {
-    // Try region first, fall back to any healthy node
+    // capacity_used_bytes is kept accurate by reconcileNodeUsage (startup + hourly)
     const query = region
       ? { status: 'healthy', 'metadata.region': region }
       : { status: 'healthy' };

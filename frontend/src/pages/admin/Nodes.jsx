@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { useAuth } from '../../hooks/useAuth';
-import { getNodes, addNode, updateNode } from '../../api/admin';
+import { getNodes, addNode, updateNode, reconcileNodes } from '../../api/admin';
+
+function fmtStorage(gb) {
+  if (gb >= 1) return `${gb.toFixed(2)} GB`;
+  const mb = gb * 1024;
+  if (mb >= 1) return `${mb.toFixed(1)} MB`;
+  return `${(mb * 1024).toFixed(0)} KB`;
+}
 import { I } from '../../components/Icons';
 
 function AddNodeModal({ onSave, onCancel }) {
@@ -130,7 +137,7 @@ function CapacityBar({ used, total }) {
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '999px' }} />
       </div>
       <span className="mono" style={{ fontSize: '11.5px', color: 'var(--fg-2)', whiteSpace: 'nowrap' }}>
-        {used.toFixed(1)} / {total.toFixed(0)} GB
+        {fmtStorage(used)} / {total.toFixed(0)} GB
       </span>
     </div>
   );
@@ -143,6 +150,7 @@ export default function Nodes() {
   const [error, setError] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => { if (token) load(); }, [token]);
 
@@ -153,6 +161,15 @@ export default function Nodes() {
       setNodes(data.nodes || []);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      await reconcileNodes(token);
+      await load();
+    } catch (e) { setError(e.message); }
+    finally { setSyncing(false); }
   }
 
   async function handleAdd(body) {
@@ -171,9 +188,14 @@ export default function Nodes() {
     <AdminLayout title="Storage Nodes">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Storage Nodes</h1>
-        <button className="btn primary" onClick={() => setShowAdd(true)}>
-          {I.plus({ size: 14 })} Add Node
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn ghost" onClick={handleSync} disabled={syncing}>
+            {I.refresh({ size: 14 })} {syncing ? 'Syncing…' : 'Sync Usage'}
+          </button>
+          <button className="btn primary" onClick={() => setShowAdd(true)}>
+            {I.plus({ size: 14 })} Add Node
+          </button>
+        </div>
       </div>
 
       {error && <div style={{ padding: '10px 14px', marginBottom: '16px', background: 'oklch(0.72 0.145 25 / .15)', border: '1px solid oklch(0.72 0.145 25 / .4)', borderRadius: '8px', color: 'var(--coral)', fontSize: '13px' }}>{error}</div>}
@@ -216,7 +238,7 @@ export default function Nodes() {
             <CapacityBar used={node.capacity_used_gb} total={node.capacity_total_gb} />
 
             <div style={{ display: 'flex', gap: '20px', marginTop: '10px', fontSize: '11.5px', color: 'var(--fg-2)', alignItems: 'center' }}>
-              <span>Available: <span className="mono" style={{ color: 'var(--fg-1)' }}>{node.capacity_available_gb.toFixed(1)} GB</span></span>
+              <span>Available: <span className="mono" style={{ color: 'var(--fg-1)' }}>{fmtStorage(node.capacity_available_gb)}</span></span>
               <span>Added: <span style={{ color: 'var(--fg-1)' }}>{new Date(node.created_at).toLocaleDateString()}</span></span>
               <button onClick={() => setEditing(node)} className="btn ghost" style={{ marginLeft: 'auto', height: '28px', padding: '0 12px', fontSize: '12px' }}>
                 Edit

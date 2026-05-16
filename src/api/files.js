@@ -1,5 +1,4 @@
 import { BucketModel } from '../db/models/Bucket.js';
-import { StorageNodeModel } from '../db/models/StorageNode.js';
 import { UsageMetricModel } from '../db/models/UsageMetric.js';
 import { trackUsageAsync } from '../services/usage.js';
 import { listFiles, downloadFile, uploadFile, deleteFile, statFile } from '../services/files.js';
@@ -18,10 +17,7 @@ export async function registerFileRoutes(fastify) {
 
       const result = await listFiles(bucket.bucket_name, prefix);
 
-      trackUsageAsync(async () => {
-        const metric = await UsageMetricModel.getOrCreate(user.id, new Date());
-        await metric.incrementList();
-      });
+      trackUsageAsync(() => UsageMetricModel.incrementRequest(user.id, new Date(), 'get'));
 
       return reply.code(200).send(result);
     } catch (error) {
@@ -47,10 +43,7 @@ export async function registerFileRoutes(fastify) {
       reply.header('Content-Length', result.size);
       reply.header('Content-Disposition', `attachment; filename="${key.split('/').pop()}"`);
 
-      trackUsageAsync(async () => {
-        const metric = await UsageMetricModel.getOrCreate(user.id, new Date());
-        await metric.incrementDownload(result.size);
-      });
+      trackUsageAsync(() => UsageMetricModel.incrementDownload(user.id, new Date(), result.size));
 
       return reply.code(200).send(result.stream);
     } catch (error) {
@@ -87,15 +80,7 @@ export async function registerFileRoutes(fastify) {
         await uploadFile(bucket.bucket_name, key, buffer, mimetype);
         await BucketModel.incrementUsage(bucket._id.toString(), buffer.length);
 
-        // Keep node-level used bytes in sync so getLeastUsedNode distributes correctly
-        trackUsageAsync(() =>
-          StorageNodeModel.incrementUsed(bucket.node_id.toString(), buffer.length).catch(() => {})
-        );
-
-        trackUsageAsync(async () => {
-          const metric = await UsageMetricModel.getOrCreate(user.id, new Date());
-          await metric.incrementUpload(buffer.length);
-        });
+        trackUsageAsync(() => UsageMetricModel.incrementUpload(user.id, new Date(), buffer.length));
 
         uploads.push({ filename: key, size: buffer.length });
       }
@@ -137,21 +122,14 @@ export async function registerFileRoutes(fastify) {
         return reply.code(404).send({ error: 'bucket_not_found' });
       }
 
-      // Stat before delete so we can decrement usage counters
       const fileStat = await statFile(bucket.bucket_name, key);
       await deleteFile(bucket.bucket_name, key);
 
       if (fileStat?.size) {
         await BucketModel.incrementUsage(bucket._id.toString(), -fileStat.size);
-        trackUsageAsync(() =>
-          StorageNodeModel.incrementUsed(bucket.node_id.toString(), -fileStat.size).catch(() => {})
-        );
       }
 
-      trackUsageAsync(async () => {
-        const metric = await UsageMetricModel.getOrCreate(user.id, new Date());
-        await metric.incrementRequest();
-      });
+      trackUsageAsync(() => UsageMetricModel.incrementRequest(user.id, new Date(), 'delete'));
 
       return reply.code(200).send({ deleted: true, key });
     } catch (error) {

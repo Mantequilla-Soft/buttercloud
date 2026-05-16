@@ -51,6 +51,21 @@ export const config = {
     password: process.env.ADMIN_PASSWORD || 'AdminPassword123!',
   },
 
+  // Email / SMTP
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || 'billing@buttercloud.io',
+  },
+
+  // HIVE payments
+  hive: {
+    account: process.env.HIVE_ACCOUNT || '',
+    apiUrl: process.env.HIVE_API_URL || 'https://api.hive.blog',
+  },
+
   // Logging
   logLevel: process.env.LOG_LEVEL || 'info',
 

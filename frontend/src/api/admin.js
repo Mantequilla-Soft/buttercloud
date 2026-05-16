@@ -15,7 +15,11 @@ export const getUsers    = (token, params = '') => req(token, `/api/v1/admin/use
 export const updateUser  = (token, id, body)   => req(token, `/api/v1/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 export const getNodes    = (token)             => req(token, '/api/v1/admin/nodes');
 export const addNode     = (token, body)       => req(token, '/api/v1/admin/nodes', { method: 'POST', body: JSON.stringify(body) });
-export const updateNode  = (token, id, body)   => req(token, `/api/v1/admin/nodes/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const updateNode    = (token, id, body) => req(token, `/api/v1/admin/nodes/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const reconcileNodes    = (token)          => req(token, '/api/v1/admin/nodes/reconcile', { method: 'POST' });
+export const getAdminBilling   = (token, status)  => req(token, `/api/v1/admin/billing?status=${status || 'draft'}&limit=100`);
+export const generateInvoices  = (token, month)   => req(token, '/api/v1/admin/billing/generate', { method: 'POST', body: JSON.stringify({ month }) });
+export const updateInvoice     = (token, id, status) => req(token, `/api/v1/admin/billing/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
 export const getHealth   = (token)             => req(token, '/api/v1/admin/node-health');
 export const getBuckets  = (token)             => req(token, '/api/v1/admin/buckets');
 export const migrateBucket = (token, id, body) => req(token, `/api/v1/admin/buckets/${id}/migrate`, { method: 'POST', body: JSON.stringify(body) });

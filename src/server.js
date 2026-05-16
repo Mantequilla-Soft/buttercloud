@@ -11,7 +11,11 @@ import { registerUsageRoutes } from './api/usage.js';
 import { registerAdminUserRoutes } from './api/admin/users.js';
 import { registerAdminNodeRoutes } from './api/admin/nodes.js';
 import { registerAdminBucketRoutes } from './api/admin/buckets.js';
+import { registerAdminBillingRoutes } from './api/admin/billing.js';
 import { registerFileRoutes } from './api/files.js';
+import { reconcileNodeUsage } from './services/reconcile.js';
+import { generateMonthlyInvoices, previousMonth } from './services/billing.js';
+import { pollHivePayments } from './services/hivePayments.js';
 
 export async function createServer() {
   const fastify = Fastify({
@@ -49,6 +53,15 @@ export async function createServer() {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
+  // Public payment config — tells the frontend where to send crypto payments
+  fastify.get('/api/v1/payment-config', async () => {
+    return {
+      hive_account: config.hive.account || null,
+      currencies: config.hive.account ? ['HBD', 'HIVE'] : [],
+      memo_prefix: 'BC-',
+    };
+  });
+
   // Register Admin API routes
   await registerAuthRoutes(fastify);
   await registerCredentialRoutes(fastify);
@@ -56,6 +69,7 @@ export async function createServer() {
   await registerAdminUserRoutes(fastify);
   await registerAdminNodeRoutes(fastify);
   await registerAdminBucketRoutes(fastify);
+  await registerAdminBillingRoutes(fastify);
   await registerFileRoutes(fastify);
 
   // Register S3 gateway (catch-all route, must be last)
@@ -75,6 +89,47 @@ export async function startServer() {
     console.error('Failed to connect to database:', error);
     process.exit(1);
   }
+
+  // Reconcile node usage on startup
+  try {
+    const results = await reconcileNodeUsage();
+    const corrected = results.filter(r => r.corrected);
+    if (corrected.length) {
+      console.log(`Reconciled ${corrected.length} node(s):`, corrected.map(r => `${r.node} ${r.stored_bytes}→${r.actual_bytes} bytes`).join(', '));
+    } else {
+      console.log('Node usage in sync');
+    }
+  } catch (e) {
+    console.warn('Reconciliation failed (non-fatal):', e.message);
+  }
+
+  // Reconcile hourly to catch any drift
+  setInterval(async () => {
+    try { await reconcileNodeUsage(); } catch {}
+  }, 60 * 60 * 1000);
+
+  // Poll HIVE/HBD payments every 60s
+  if (config.hive.account) {
+    setInterval(async () => {
+      try { await pollHivePayments(); } catch (e) {
+        console.warn('HIVE payment poll failed:', e.message);
+      }
+    }, 60 * 1000);
+    console.log(`HIVE payment polling active — watching @${config.hive.account}`);
+  }
+
+  // Auto-generate invoices on the 1st of each month at 02:00 UTC
+  setInterval(async () => {
+    const now = new Date();
+    if (now.getUTCDate() === 1 && now.getUTCHours() === 2) {
+      try {
+        const results = await generateMonthlyInvoices(previousMonth());
+        console.log(`Monthly invoices: ${results.filter(r => !r.skipped && !r.error).length} created`);
+      } catch (e) {
+        console.error('Invoice generation failed:', e.message);
+      }
+    }
+  }, 60 * 60 * 1000); // check every hour
 
   // Start server
   try {

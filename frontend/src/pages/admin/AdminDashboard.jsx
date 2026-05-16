@@ -4,6 +4,13 @@ import { useAuth } from '../../hooks/useAuth';
 import { getUsers, getNodes } from '../../api/admin';
 import { I } from '../../components/Icons';
 
+function fmtStorage(gb) {
+  if (gb >= 1) return `${gb.toFixed(2)} GB`;
+  const mb = gb * 1024;
+  if (mb >= 1) return `${mb.toFixed(1)} MB`;
+  return `${(mb * 1024).toFixed(0)} KB`;
+}
+
 function StatCard({ label, value, sub, icon, accent = 'var(--butter)' }) {
   return (
     <div style={{ padding: '20px 22px', background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
@@ -43,7 +50,7 @@ function NodeHealth({ node }) {
           <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: '999px' }} />
         </div>
         <span className="mono" style={{ fontSize: '11px', color: 'var(--fg-2)', whiteSpace: 'nowrap' }}>
-          {node.capacity_used_gb.toFixed(1)} / {node.capacity_total_gb.toFixed(0)} GB
+          {fmtStorage(node.capacity_used_gb)} / {node.capacity_total_gb.toFixed(0)} GB
         </span>
         <span style={{ fontSize: '11px', color: 'var(--fg-3)' }}>{node.bucket_count} buckets</span>
       </div>
@@ -76,8 +83,8 @@ export default function AdminDashboard() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '28px' }}>
             <StatCard label="Total Users"    value={users?.total ?? '—'}   icon={I.key}      accent="var(--sky)" />
-            <StatCard label="Storage Nodes"  value={`${activeNodes} / ${nodes.length}`} icon={I.bucket}   accent="var(--butter)" sub={`${usedCapacityGb.toFixed(1)} GB used`} />
-            <StatCard label="Total Capacity" value={`${totalCapacityGb.toFixed(0)} GB`} icon={I.gauge}    accent="var(--sage)" sub={`${(usedCapacityGb / (totalCapacityGb || 1) * 100).toFixed(1)}% used`} />
+            <StatCard label="Storage Nodes"  value={`${activeNodes} / ${nodes.length}`} icon={I.bucket}   accent="var(--butter)" sub={`${fmtStorage(usedCapacityGb)} used`} />
+            <StatCard label="Total Capacity" value={`${totalCapacityGb.toFixed(0)} GB`} icon={I.gauge}    accent="var(--sage)" sub={`${(usedCapacityGb / (totalCapacityGb || 1) * 100).toFixed(2)}% used`} />
             <StatCard label="Total Buckets"  value={nodes.reduce((s, n) => s + n.bucket_count, 0)} icon={I.folder} accent="var(--plum)" />
           </div>
 

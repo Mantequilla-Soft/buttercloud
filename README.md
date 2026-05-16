@@ -30,7 +30,7 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 - File browser with folder navigation, upload, download, delete, image/video/audio preview
 - API key management — create, copy-once secret, revoke
 - Usage dashboard — storage, transfer, request breakdown with quota bars
-- Billing history — invoice table with status badges
+- Billing history — invoice table with status badges and payment instructions
 - Account management — profile, plan badge, password change
 
 **Admin Panel**
@@ -38,13 +38,22 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 - Storage node management — add nodes, edit capacity, monitor health
 - Bucket overview — see all customer buckets across all nodes
 - Bucket migration — move a customer's bucket between nodes with no client downtime
+- Billing management — generate invoices, send to customers, track payment status
+
+**Billing & Payments**
+- Monthly invoice generation (manual or automatic on the 1st of each month)
+- Invoices based on plan base fee + storage overage + transfer overage
+- Invoice email delivery via any SMTP provider (Resend, Postmark, Gmail, etc.)
+- Crypto payment tracking — HIVE and HBD accepted natively
+- Payment memo system: customers include `BC-{invoiceId}` in their transfer memo
+- Automatic invoice reconciliation every 60 seconds — no manual payment confirmation needed
 
 **Infrastructure**
 - Multi-node MinIO support — distribute buckets across VPS servers
 - Automatic node selection — new buckets go to the least-loaded node
 - Usage tracking — per-upload/download byte counters, async (non-blocking)
+- Node usage reconciliation — storage counters self-heal on startup and hourly
 - Quota enforcement — hard limits by plan at the upload level
-- Audit logging with automatic 1-year TTL
 
 ## Plans
 
@@ -61,17 +70,8 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 - **Frontend** — React, Vite, React Router
 - **Auth** — JWT (HS256) for portal, AWS SigV4 for S3 gateway
 - **Storage** — MinIO (any number of independent nodes)
-
-## Features
-
-- ✅ **AWS Signature Version 4 Authentication** — Full SigV4 validation
-- ✅ **Multi-MinIO Clustering** — Distribute buckets across nodes
-- ✅ **Quota Enforcement** — Hard storage limits per customer
-- ✅ **Usage Tracking** — Track bandwidth and requests for billing
-- ✅ **Admin APIs** — Manage users, nodes, quotas
-- ✅ **Audit Logging** — All operations logged for compliance
-- ✅ **JWT Authentication** — Secure admin API access
-- ✅ **Async Usage Tracking** — Doesn't block API responses
+- **Email** — Nodemailer (any SMTP provider)
+- **Payments** — HIVE blockchain (self-polled, no third-party processor)
 
 ## Requirements
 
@@ -106,6 +106,16 @@ JWT_SECRET=change-this-to-a-long-random-string
 MINIO_INTERNAL_ENDPOINT=http://your-minio-host:9000
 MINIO_ROOT_USER=your-minio-user
 MINIO_ROOT_PASSWORD=your-minio-password
+
+# Optional: email delivery (Resend recommended — resend.com, 3,000 free/mo)
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_USER=resend
+SMTP_PASS=re_your_api_key
+SMTP_FROM=billing@yourdomain.com
+
+# Optional: HIVE crypto payment tracking
+HIVE_ACCOUNT=yourhiveaccount
 ```
 
 ### 3. Initialize database
@@ -191,6 +201,38 @@ Browser / AWS SDK
 - **One bucket per user** — simplifies quota enforcement and billing
 - **Bucket → node mapping** stored in MongoDB, resolved on every request
 - **Async usage tracking** — upload/download counters written after response sent
+- **Self-polled payments** — no payment processor; HIVE blockchain is queried directly every 60s
+
+## Billing Flow
+
+```
+1. Admin: Generate Invoices (manual or auto on the 1st of each month)
+   → Creates draft invoices for all active users based on usage
+
+2. Admin: Send
+   → Invoice status: draft → pending
+   → Customer receives email with itemized breakdown + payment instructions
+
+3. Customer sends payment on HIVE blockchain
+   → Transfer HBD (or HIVE) to @yourhiveaccount
+   → Memo must be: BC-{invoiceId}  ← shown in the email and customer portal
+
+4. Buttercloud polls the HIVE account every 60s
+   → Matches memo to invoice, verifies amount
+   → Automatically marks invoice as paid
+
+5. Admin can also mark any invoice paid manually
+```
+
+Invoices are idempotent — generating twice for the same month skips existing records.
+
+## Payments
+
+Buttercloud accepts **HIVE** and **HBD** (Hive Backed Dollar) natively with no payment processor or KYC requirements. The system polls your HIVE account every 60 seconds via the public HIVE JSON-RPC API.
+
+**HBD** is the recommended payment currency — it's the HIVE stablecoin pegged to $1 USD, so invoice amounts map directly (`$12.50 = 12.500 HBD`). HIVE is also accepted and converted at the on-chain price feed rate.
+
+To add more currencies (USDC on Stellar, etc.) in the future, the polling service in `src/services/hivePayments.js` can be extended without touching the rest of the billing stack.
 
 ## S3 API Reference
 
@@ -211,16 +253,22 @@ POST   /{bucket}/{key}?uploads  Multipart upload
 
 ## Portal API Reference
 
-All routes require `Authorization: Bearer <token>`:
+Public:
 
 ```
 POST   /api/v1/auth/signup          Create account
 POST   /api/v1/auth/login           Login
+GET    /api/v1/payment-config       Payment addresses and supported currencies
+```
+
+Authenticated (`Authorization: Bearer <token>`):
+
+```
 GET    /api/v1/me                   Current user profile
 GET    /api/v1/credentials          List API keys
 POST   /api/v1/credentials          Create API key
 DELETE /api/v1/credentials/:id      Revoke API key
-GET    /api/v1/files                List files (MinIO proxy)
+GET    /api/v1/files                List files
 POST   /api/v1/files/upload         Upload file
 GET    /api/v1/files/download/:key  Download file
 DELETE /api/v1/files/:key           Delete file
@@ -233,13 +281,17 @@ GET    /api/v1/billing              Invoice history
 Admin routes (require `plan: admin` or `plan: enterprise`):
 
 ```
-GET    /api/v1/admin/users               List users
-PATCH  /api/v1/admin/users/:id           Update user plan/status
-GET    /api/v1/admin/nodes               List storage nodes
-POST   /api/v1/admin/nodes               Add storage node
-PATCH  /api/v1/admin/nodes/:id           Update node
-GET    /api/v1/admin/buckets             List all buckets
-POST   /api/v1/admin/buckets/:id/migrate Migrate bucket to another node
+GET    /api/v1/admin/users                List users
+PATCH  /api/v1/admin/users/:id            Update user plan/status
+GET    /api/v1/admin/nodes                List storage nodes
+POST   /api/v1/admin/nodes                Add storage node
+PATCH  /api/v1/admin/nodes/:id            Update node
+POST   /api/v1/admin/nodes/reconcile      Sync node usage from bucket totals
+GET    /api/v1/admin/buckets              List all buckets
+POST   /api/v1/admin/buckets/:id/migrate  Migrate bucket to another node
+GET    /api/v1/admin/billing              List invoices (filter by status)
+POST   /api/v1/admin/billing/generate     Generate invoices for a month
+PATCH  /api/v1/admin/billing/:id          Update invoice status
 ```
 
 ## Adding More Storage
@@ -271,12 +323,15 @@ server {
 ```
 
 Checklist before going live:
+
 - [ ] Strong, unique `JWT_SECRET` (32+ random characters)
 - [ ] Strong MinIO and MongoDB passwords
 - [ ] HTTPS on all public endpoints
 - [ ] MongoDB backups configured
 - [ ] Firewall: only port 443 public, MinIO port internal-only
 - [ ] `NODE_ENV=production` in `.env`
+- [ ] SMTP configured and test email verified
+- [ ] `HIVE_ACCOUNT` set and receiving test transfers
 
 ## Development
 
