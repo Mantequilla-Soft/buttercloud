@@ -187,15 +187,20 @@ chown "$INSTALL_USER:$INSTALL_USER" "$INSTALL_DIR/.env"
 chmod 600 "$INSTALL_DIR/.env"
 success ".env written (permissions: 600)"
 
+# ─── fix ownership so npm can write node_modules ─────────────────────────────
+info "Setting directory ownership to ${INSTALL_USER}…"
+chown -R "$INSTALL_USER:$INSTALL_USER" "$INSTALL_DIR"
+success "Ownership set"
+
 # ─── install dependencies ─────────────────────────────────────────────────────
 echo ""
 info "Installing backend dependencies…"
 cd "$INSTALL_DIR"
-sudo -u "$INSTALL_USER" npm install --omit=dev 2>&1 | tail -3
+sudo -u "$INSTALL_USER" npm install --omit=dev
 success "Backend dependencies installed"
 
 info "Installing frontend dependencies and building…"
-sudo -u "$INSTALL_USER" npm run build:frontend 2>&1 | tail -5
+sudo -u "$INSTALL_USER" npm run build:frontend
 success "Frontend built → frontend/dist/"
 
 # ─── initialise database ─────────────────────────────────────────────────────
