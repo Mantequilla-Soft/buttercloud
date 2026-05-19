@@ -200,7 +200,10 @@ sudo -u "$INSTALL_USER" npm install --omit=dev
 success "Backend dependencies installed"
 
 info "Installing frontend dependencies and building…"
-sudo -u "$INSTALL_USER" npm run build:frontend
+cd "$INSTALL_DIR/frontend"
+sudo -u "$INSTALL_USER" npm install
+sudo -u "$INSTALL_USER" npm run build
+cd "$INSTALL_DIR"
 success "Frontend built → frontend/dist/"
 
 # ─── initialise database ─────────────────────────────────────────────────────

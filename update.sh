@@ -62,7 +62,10 @@ sudo -u "$INSTALL_USER" npm install --omit=dev 2>&1 | tail -3
 success "Backend dependencies up to date"
 
 info "Rebuilding frontend…"
-sudo -u "$INSTALL_USER" npm run build:frontend 2>&1 | tail -5
+cd "$SCRIPT_DIR/frontend"
+sudo -u "$INSTALL_USER" npm install
+sudo -u "$INSTALL_USER" npm run build
+cd "$SCRIPT_DIR"
 success "Frontend rebuilt → frontend/dist/"
 
 # ─── database migrations (idempotent) ────────────────────────────────────────
