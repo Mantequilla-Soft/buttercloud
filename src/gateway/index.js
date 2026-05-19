@@ -19,16 +19,15 @@ export async function registerS3Gateway(fastify) {
 
   // List buckets: GET /
   fastify.get('/', async (request, reply) => {
+    // Browser navigation — serve the SPA
+    if (!request.s3auth) {
+      return reply.sendFile('index.html');
+    }
+
     try {
       const userId = request.s3auth.userId;
-
-      // Find user's bucket
       const bucket = await BucketModel.findByUserId(userId);
-
-      if (!bucket) {
-        return buildListBucketsResponse(reply, []);
-      }
-
+      if (!bucket) return buildListBucketsResponse(reply, []);
       return buildListBucketsResponse(reply, [bucket]);
     } catch (error) {
       return handleS3Error(reply, error);
@@ -40,6 +39,17 @@ export async function registerS3Gateway(fastify) {
     method: ['PUT', 'GET', 'DELETE', 'HEAD', 'POST'],
     url: '/*',
     async handler(request, reply) {
+      // Browser navigation (no AWS auth) — serve the SPA or reject non-GET
+      if (!request.s3auth) {
+        if (request.method === 'GET' || request.method === 'HEAD') {
+          return reply.sendFile('index.html');
+        }
+        return reply.code(403).send({
+          Code: 'AccessDenied',
+          Message: 'Missing Authorization header',
+        });
+      }
+
       try {
         const userId = request.s3auth.userId;
         const user = request.s3auth.user;

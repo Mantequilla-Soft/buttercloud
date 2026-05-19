@@ -19,13 +19,11 @@ export async function validateS3Auth(request, reply) {
     return; // Continue to next handler
   }
 
-  const authHeader = request.headers.authorization;
+  const authHeader = request.headers.authorization || '';
 
-  if (!authHeader) {
-    return reply.code(403).send({
-      Code: 'AccessDenied',
-      Message: 'Missing Authorization header',
-    });
+  // Not an S3 request — let it fall through to static files or SPA handler
+  if (!authHeader.startsWith('AWS4-HMAC-SHA256')) {
+    return;
   }
 
   try {

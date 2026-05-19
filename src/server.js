@@ -1,7 +1,13 @@
 import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import fastifyMultipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { existsSync } from 'fs';
 import { config } from './config.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { connectDB, disconnectDB } from './db/index.js';
 import { registerS3Gateway } from './gateway/index.js';
 import { validateJWT } from './middleware/jwt.js';
@@ -56,6 +62,19 @@ export async function createServer() {
       await validateJWT(request, reply);
     }
   });
+
+  // Serve built frontend static assets (JS, CSS, images).
+  // wildcard:false means only files that physically exist are registered —
+  // routes like /login or / are left for the handlers below.
+  const frontendDist = join(__dirname, '..', 'frontend', 'dist');
+  if (existsSync(frontendDist)) {
+    await fastify.register(fastifyStatic, {
+      root: frontendDist,
+      wildcard: false,
+      index: false,
+      serve: true,
+    });
+  }
 
   // Health check
   fastify.get('/health', async () => {
