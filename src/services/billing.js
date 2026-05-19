@@ -3,6 +3,7 @@ import { UsageMetricModel } from '../db/models/UsageMetric.js';
 import { BillingRecordModel } from '../db/models/BillingRecord.js';
 import { QuotaModel } from '../db/models/Quota.js';
 import { BucketModel } from '../db/models/Bucket.js';
+import { sendOverdueInvoiceEmail } from './email.js';
 
 /**
  * Generate an invoice for one user for a given month string (YYYY-MM).
@@ -76,6 +77,35 @@ export async function generateMonthlyInvoices(monthStr) {
   }
 
   return results;
+}
+
+/**
+ * Marks all pending invoices past their due date as overdue and sends reminder emails.
+ * Returns the number of invoices flipped.
+ */
+export async function markOverdueAndNotify() {
+  const flipped = await BillingRecordModel.markOverdue();
+
+  for (const inv of flipped) {
+    try {
+      const user = await UserModel.findById(inv.user_id.toString());
+      if (user?.email) {
+        await sendOverdueInvoiceEmail({
+          to: user.email,
+          invoice: {
+            id: inv._id.toString(),
+            month: inv.month.toISOString().substring(0, 7),
+            total_usd: inv.total,
+            due_date: inv.due_date.toISOString(),
+          },
+        });
+      }
+    } catch (e) {
+      console.warn(`Overdue email failed for invoice ${inv._id}:`, e.message);
+    }
+  }
+
+  return flipped.length;
 }
 
 /**

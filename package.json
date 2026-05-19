@@ -7,10 +7,13 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
+    "dev:all": "concurrently -n api,web -c cyan,yellow \"npm run dev\" \"npm run dev:frontend\"",
     "setup-db": "node scripts/setup-db.js",
     "dev:frontend": "cd frontend && npm run dev",
     "build:frontend": "cd frontend && npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "s3",
@@ -36,6 +39,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "pino-pretty": "^13.1.3"
+    "@vitest/coverage-v8": "^4.1.6",
+    "concurrently": "^9.2.1",
+    "mongodb-memory-server": "^11.1.0",
+    "pino-pretty": "^13.1.3",
+    "vitest": "^4.1.6"
   }
 }

@@ -14,7 +14,8 @@ import { registerAdminBucketRoutes } from './api/admin/buckets.js';
 import { registerAdminBillingRoutes } from './api/admin/billing.js';
 import { registerFileRoutes } from './api/files.js';
 import { reconcileNodeUsage } from './services/reconcile.js';
-import { generateMonthlyInvoices, previousMonth } from './services/billing.js';
+import { generateMonthlyInvoices, previousMonth, markOverdueAndNotify } from './services/billing.js';
+import { checkAndSendQuotaWarnings } from './services/quotaWarnings.js';
 import { pollHivePayments } from './services/hivePayments.js';
 
 export async function createServer() {
@@ -40,10 +41,18 @@ export async function createServer() {
   });
 
   // JWT middleware for protected API routes
+  const PUBLIC_PATHS = new Set([
+    '/api/v1/auth/signup',
+    '/api/v1/auth/login',
+    '/api/v1/auth/logout',
+    '/api/v1/auth/verify-email',
+    '/api/v1/auth/forgot-password',
+    '/api/v1/auth/reset-password',
+  ]);
+
   fastify.addHook('onRequest', async (request, reply) => {
     const path = request.url.split('?')[0];
-    // Apply JWT to all /api/v1/* except /api/v1/auth/* which are public
-    if (path.startsWith('/api/v1/') && !path.startsWith('/api/v1/auth/')) {
+    if (path.startsWith('/api/v1/') && !PUBLIC_PATHS.has(path)) {
       await validateJWT(request, reply);
     }
   });
@@ -117,6 +126,24 @@ export async function startServer() {
     }, 60 * 1000);
     console.log(`HIVE payment polling active — watching @${config.hive.account}`);
   }
+
+  // Daily billing checks: mark overdue invoices + quota warnings
+  async function runDailyBillingChecks() {
+    try {
+      const flipped = await markOverdueAndNotify();
+      if (flipped > 0) console.log(`Marked ${flipped} invoice(s) as overdue`);
+    } catch (e) {
+      console.warn('markOverdueAndNotify failed (non-fatal):', e.message);
+    }
+    try {
+      await checkAndSendQuotaWarnings();
+    } catch (e) {
+      console.warn('checkAndSendQuotaWarnings failed (non-fatal):', e.message);
+    }
+  }
+
+  runDailyBillingChecks();
+  setInterval(runDailyBillingChecks, 24 * 60 * 60 * 1000);
 
   // Auto-generate invoices on the 1st of each month at 02:00 UTC
   setInterval(async () => {

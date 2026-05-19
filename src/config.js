@@ -18,7 +18,7 @@ export const config = {
   // JWT
   jwt: {
     secret: process.env.JWT_SECRET,
-    expirationSeconds: parseInt(process.env.JWT_EXPIRATION || '3600'),
+    expirationSeconds: parseInt(process.env.JWT_EXPIRATION || '604800'), // 7 days
   },
 
   // MinIO

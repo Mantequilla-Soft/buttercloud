@@ -1,6 +1,6 @@
 import { validateS3Auth } from '../middleware/s3auth.js';
 import { checkUploadQuota, checkBucketCreationQuota, getUserQuotaInfo } from './quota.js';
-import { proxyToMinIO, validateBucketOwnership } from './proxy.js';
+import { proxyToMinIO, validateBucketOwnership, headObjectInMinIO } from './proxy.js';
 import { trackUsageAsync, trackUpload, trackDownload, trackDelete, trackList, trackBucketCreate, trackBucketDelete } from '../services/usage.js';
 import { createBucketInMinIO } from '../services/files.js';
 import { BucketModel } from '../db/models/Bucket.js';
@@ -222,11 +222,11 @@ async function handleListObjects(request, reply, userId, bucketName) {
 
 async function handlePutObject(request, reply, userId, bucketName, objectKey) {
   const bucket = await validateBucketOwnership(bucketName, userId);
+  const isPartUpload = !!request.query.partNumber;
 
-  // Get content length
   const contentLength = parseInt(request.headers['content-length'] || '0');
 
-  // Check quota
+  // Check quota for every PUT — parts consume real space on MinIO during assembly
   if (contentLength > 0) {
     await checkUploadQuota(bucket._id, contentLength);
   }
@@ -234,8 +234,9 @@ async function handlePutObject(request, reply, userId, bucketName, objectKey) {
   // Proxy to MinIO
   const response = await proxyToMinIO(request, bucketName);
 
-  if (response.status >= 200 && response.status < 300) {
-    // Track upload (async, after response sent)
+  if (response.status >= 200 && response.status < 300 && !isPartUpload) {
+    // Only track single-PUT uploads. Multipart parts are tracked once on CompleteMultipartUpload
+    // so current_usage_bytes stays accurate for quota checks between parts.
     trackUsageAsync(() => trackUpload(userId, bucket._id, bucketName, contentLength));
   }
 
@@ -281,14 +282,20 @@ async function handleHeadObject(request, reply, userId, bucketName, objectKey) {
 
 async function handlePostObject(request, reply, userId, bucketName, objectKey) {
   const bucket = await validateBucketOwnership(bucketName, userId);
+  // ?uploads  → CreateMultipartUpload (initiate, no tracking needed)
+  // ?uploadId → CompleteMultipartUpload (finalize, track actual size)
+  const isComplete = !!request.query.uploadId;
 
   // Proxy to MinIO
   const response = await proxyToMinIO(request, bucketName);
 
-  if (response.status >= 200 && response.status < 300) {
-    // Track multipart completion (async)
-    // We'd need to parse the response to get the final object size
-    trackUsageAsync(() => trackUpload(userId, bucket._id, bucketName, 0));
+  if (response.status >= 200 && response.status < 300 && isComplete) {
+    // HEAD the assembled object to get its true size — CompleteMultipartUpload
+    // response XML doesn't include content-length.
+    trackUsageAsync(async () => {
+      const finalSize = await headObjectInMinIO(bucketName, objectKey);
+      await trackUpload(userId, bucket._id, bucketName, finalSize);
+    });
   }
 
   return reply.code(response.status).headers(response.headers).send(response.body);

@@ -29,6 +29,7 @@ export class UsageMetricModel {
       delete_requests: 0,
       generated_at: new Date(),
       finalized: false,
+      quota_warned: { storage: false, transfer: false },
     };
 
     await usageMetrics().insertOne(metric);
@@ -110,6 +111,29 @@ export class UsageMetricModel {
         },
       }
     );
+  }
+
+  static async setQuotaWarned(userId, month, type) {
+    const monthDate = new Date(month);
+    monthDate.setUTCDate(1);
+    monthDate.setUTCHours(0, 0, 0, 0);
+
+    await usageMetrics().updateOne(
+      { user_id: new ObjectId(userId), month: monthDate },
+      { $set: { [`quota_warned.${type}`]: true } }
+    );
+  }
+
+  static async findLastNMonths(userId, n = 6) {
+    const cutoff = new Date();
+    cutoff.setUTCDate(1);
+    cutoff.setUTCHours(0, 0, 0, 0);
+    cutoff.setUTCMonth(cutoff.getUTCMonth() - (n - 1));
+
+    return usageMetrics()
+      .find({ user_id: new ObjectId(userId), month: { $gte: cutoff } })
+      .sort({ month: 1 })
+      .toArray();
   }
 
   static async listUnfinalized(limit = 100) {

@@ -12,6 +12,7 @@ export default function Sidebar() {
     { label: 'Usage', path: '/usage', icon: I.activity },
     { label: 'Billing', path: '/billing', icon: I.card },
     { label: 'Account', path: '/account', icon: I.settings },
+    { label: 'Docs', path: '/docs', icon: I.book },
   ];
 
   return (

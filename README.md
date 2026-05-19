@@ -29,9 +29,10 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 **Customer Portal**
 - File browser with folder navigation, upload, download, delete, image/video/audio preview
 - API key management — create, copy-once secret, revoke
-- Usage dashboard — storage, transfer, request breakdown with quota bars
+- Usage dashboard — storage, transfer, request breakdown with quota bars and 6-month history charts
 - Billing history — invoice table with status badges and payment instructions
-- Account management — profile, plan badge, password change
+- Account management — profile, plan badge, password change, password recovery via email
+- Developer docs — in-app quick-start with pre-filled SDK examples (CLI, Python, Node.js, rclone)
 
 **Admin Panel**
 - User management — list all users, change plans, activate/deactivate
@@ -47,6 +48,8 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 - Crypto payment tracking — HIVE and HBD accepted natively
 - Payment memo system: customers include `BC-{invoiceId}` in their transfer memo
 - Automatic invoice reconciliation every 60 seconds — no manual payment confirmation needed
+- Auto-overdue flagging — pending invoices past due date are automatically marked overdue daily
+- Quota warning emails — customers notified by email when storage or transfer hits 80% of plan limit
 
 **Infrastructure**
 - Multi-node MinIO support — distribute buckets across VPS servers
@@ -256,26 +259,31 @@ POST   /{bucket}/{key}?uploads  Multipart upload
 Public:
 
 ```
-POST   /api/v1/auth/signup          Create account
-POST   /api/v1/auth/login           Login
-GET    /api/v1/payment-config       Payment addresses and supported currencies
+POST   /api/v1/auth/signup              Create account
+POST   /api/v1/auth/login               Login
+POST   /api/v1/auth/forgot-password     Request password reset email
+POST   /api/v1/auth/reset-password      Reset password via token
+GET    /api/v1/payment-config           Payment addresses and supported currencies
 ```
 
 Authenticated (`Authorization: Bearer <token>`):
 
 ```
-GET    /api/v1/me                   Current user profile
-GET    /api/v1/credentials          List API keys
-POST   /api/v1/credentials          Create API key
-DELETE /api/v1/credentials/:id      Revoke API key
-GET    /api/v1/files                List files
-POST   /api/v1/files/upload         Upload file
-GET    /api/v1/files/download/:key  Download file
-DELETE /api/v1/files/:key           Delete file
-POST   /api/v1/files/mkdir          Create folder
-GET    /api/v1/usage                Monthly usage stats
-GET    /api/v1/quota                Quota limits
-GET    /api/v1/billing              Invoice history
+GET    /api/v1/me                       Current user profile
+POST   /api/v1/auth/change-password     Change password (requires current password)
+GET    /api/v1/credentials              List API keys
+POST   /api/v1/credentials              Create API key
+DELETE /api/v1/credentials/:id          Revoke API key
+GET    /api/v1/bucket                   Current user's bucket name and region
+GET    /api/v1/files                    List files
+POST   /api/v1/files/upload             Upload file
+GET    /api/v1/files/download/:key      Download file
+DELETE /api/v1/files/:key               Delete file
+POST   /api/v1/files/mkdir              Create folder
+GET    /api/v1/usage                    Monthly usage stats
+GET    /api/v1/usage/history            Last 6 months of usage (oldest first)
+GET    /api/v1/quota                    Quota limits for current plan
+GET    /api/v1/billing                  Invoice history
 ```
 
 Admin routes (require `plan: admin` or `plan: enterprise`):
@@ -340,6 +348,9 @@ npm run dev            # Backend with auto-reload
 npm run dev:frontend   # Vite dev server (port 5173, proxies /api to :3000)
 npm run build:frontend # Build frontend to frontend/dist/
 npm run setup-db       # Initialize/update database indexes and plan quotas
+npm test               # Run test suite (Vitest + mongodb-memory-server)
+npm run test:watch     # Run tests in watch mode
+npm run test:coverage  # Run tests with coverage report
 ```
 
 ## License

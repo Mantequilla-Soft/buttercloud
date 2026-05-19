@@ -28,7 +28,7 @@ export default function Layout({ title, children }) {
       <TopBar title={title} />
       {unverified && (
         <div style={{
-          position: 'fixed', top: 0, left: '220px', right: 0, zIndex: 100,
+          position: 'fixed', top: '56px', left: '220px', right: 0, zIndex: 100,
           background: 'oklch(0.85 0.135 90 / .12)', borderBottom: '1px solid oklch(0.85 0.135 90 / .3)',
           padding: '9px 20px', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12.5px',
         }}>
@@ -51,7 +51,7 @@ export default function Layout({ title, children }) {
           )}
         </div>
       )}
-      <main className="main" style={unverified ? { paddingTop: 'calc(var(--topbar-h, 48px) + 38px)' } : {}}>
+      <main className="main" style={unverified ? { paddingTop: '52px' } : {}}>
         {children}
       </main>
     </div>

@@ -16,6 +16,8 @@ export class UserModel {
       email_verified: data.email_verified || false,
       verification_token: data.verification_token || null,
       verification_token_expires: data.verification_token_expires || null,
+      reset_token: null,
+      reset_token_expires: null,
     };
 
     await users().insertOne(user);
@@ -32,6 +34,10 @@ export class UserModel {
 
   static async findByVerificationToken(token) {
     return users().findOne({ verification_token: token, deleted_at: null });
+  }
+
+  static async findByResetToken(token) {
+    return users().findOne({ reset_token: token, deleted_at: null });
   }
 
   static async update(userId, data) {

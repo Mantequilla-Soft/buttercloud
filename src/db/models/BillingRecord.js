@@ -100,6 +100,22 @@ export class BillingRecordModel {
     return BillingRecordModel.update(recordId, { status: 'finalized' });
   }
 
+  static async markOverdue() {
+    const now = new Date();
+    const overdue = await billingRecords()
+      .find({ status: 'pending', due_date: { $lt: now } })
+      .toArray();
+
+    if (overdue.length > 0) {
+      await billingRecords().updateMany(
+        { status: 'pending', due_date: { $lt: now } },
+        { $set: { status: 'overdue', updated_at: now } }
+      );
+    }
+
+    return overdue;
+  }
+
   static async listByStatus(status, limit = 100, offset = 0) {
     const query = { status };
     const total = await billingRecords().countDocuments(query);

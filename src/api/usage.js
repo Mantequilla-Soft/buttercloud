@@ -1,6 +1,7 @@
 import { validateJWT } from '../middleware/jwt.js';
 import { UsageMetricModel } from '../db/models/UsageMetric.js';
 import { BillingRecordModel } from '../db/models/BillingRecord.js';
+import { BucketModel } from '../db/models/Bucket.js';
 import { getUserQuotaInfo } from '../gateway/quota.js';
 
 export async function registerUsageRoutes(fastify) {
@@ -62,6 +63,61 @@ export async function registerUsageRoutes(fastify) {
         error: 'usage_query_failed',
         message: error.message,
       });
+    }
+  });
+
+  // GET /api/v1/bucket — current user's bucket info for SDK quick-start
+  fastify.get('/api/v1/bucket', async (request, reply) => {
+    try {
+      await validateJWT(request, reply);
+      if (!request.user) return;
+
+      const bucket = await BucketModel.findByUserId(request.user.id);
+      if (!bucket) return reply.code(404).send({ error: 'no_bucket', message: 'No bucket provisioned yet.' });
+
+      return reply.code(200).send({
+        bucket_name: bucket.bucket_name,
+        region: bucket.metadata?.region || 'default',
+        quota_bytes: bucket.quota_bytes,
+        current_usage_bytes: bucket.current_usage_bytes,
+      });
+    } catch (error) {
+      return reply.code(500).send({ error: 'server_error', message: error.message });
+    }
+  });
+
+  // GET /api/v1/usage/history — last 6 months, oldest first, zeros for missing months
+  fastify.get('/api/v1/usage/history', async (request, reply) => {
+    try {
+      await validateJWT(request, reply);
+      if (!request.user) return;
+
+      const metrics = await UsageMetricModel.findLastNMonths(request.user.id, 6);
+      const metricsMap = Object.fromEntries(
+        metrics.map(m => [m.month.toISOString().substring(0, 7), m])
+      );
+
+      const history = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setUTCDate(1);
+        d.setUTCHours(0, 0, 0, 0);
+        d.setUTCMonth(d.getUTCMonth() - i);
+        const monthStr = d.toISOString().substring(0, 7);
+        const m = metricsMap[monthStr];
+        const gb = v => Math.round((v / 1024 ** 3) * 100) / 100;
+        history.push({
+          month: monthStr,
+          storage_avg_gb: m ? gb(m.storage_avg_bytes) : 0,
+          upload_gb:      m ? gb(m.upload_bytes)      : 0,
+          download_gb:    m ? gb(m.download_bytes)     : 0,
+          request_count:  m ? m.request_count          : 0,
+        });
+      }
+
+      return reply.code(200).send({ history });
+    } catch (error) {
+      return reply.code(500).send({ error: 'history_query_failed', message: error.message });
     }
   });
 

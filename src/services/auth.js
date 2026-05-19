@@ -198,7 +198,7 @@ export async function loginUser(email, password) {
 /**
  * Validate password strength
  */
-function isStrongPassword(password) {
+export function isStrongPassword(password) {
   if (password.length < 8) return false;
   if (!/[A-Z]/.test(password)) return false; // Must have uppercase
   if (!/[a-z]/.test(password)) return false; // Must have lowercase

@@ -11,8 +11,20 @@ export async function getQuota(token) {
   return r.json();
 }
 
+export async function getUsageHistory(token) {
+  const r = await fetch('/api/v1/usage/history', { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error((await r.json()).message || 'Failed to load history');
+  return r.json();
+}
+
 export async function getBilling(token) {
   const r = await fetch('/api/v1/billing', { headers: { Authorization: `Bearer ${token}` } });
   if (!r.ok) throw new Error((await r.json()).message || 'Failed to load billing');
+  return r.json();
+}
+
+export async function getMyBucket(token) {
+  const r = await fetch('/api/v1/bucket', { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error((await r.json()).message || 'Failed to load bucket');
   return r.json();
 }

@@ -102,6 +102,30 @@ function buildProxyHeaders(request) {
 }
 
 /**
+ * HEAD an object in MinIO to retrieve its content-length.
+ * Returns 0 on any error (used for usage tracking — never blocks the caller).
+ */
+export async function headObjectInMinIO(bucketName, objectKey) {
+  try {
+    const bucket = await BucketModel.findByName(bucketName);
+    if (!bucket) return 0;
+    const node = await StorageNodeModel.findById(bucket.node_id.toString());
+    if (!node) return 0;
+
+    const response = await axios({
+      method: 'HEAD',
+      url: `${node.endpoint}/${bucketName}/${objectKey}`,
+      auth: { username: config.minio.rootUser, password: config.minio.rootPassword },
+      validateStatus: () => true,
+      timeout: 10000,
+    });
+    return parseInt(response.headers['content-length'] || '0');
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Get bucket ownership info for routing
  */
 export async function getBucketOwner(bucketName) {

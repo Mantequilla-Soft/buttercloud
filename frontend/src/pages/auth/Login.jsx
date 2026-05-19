@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const passwordWasReset = searchParams.get('reset') === '1';
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -40,6 +42,12 @@ export default function Login() {
       >
         <h1 style={{ margin: '0 0 24px', fontSize: '20px', fontWeight: 600 }}>Login</h1>
 
+        {passwordWasReset && (
+          <div style={{ padding: '12px', marginBottom: '16px', background: 'oklch(0.78 0.105 145 / .15)', borderRadius: '6px', color: 'var(--sage)', fontSize: '13px' }}>
+            Password reset successfully. You can now log in.
+          </div>
+        )}
+
         {error && (
           <div style={{ padding: '12px', marginBottom: '16px', background: 'var(--coral)', borderRadius: '6px', color: 'white', fontSize: '13px' }}>
             {error}
@@ -69,9 +77,10 @@ export default function Login() {
         </div>
 
         <div style={{ marginBottom: '24px' }}>
-          <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: 500, color: 'var(--fg-2)' }}>
-            Password
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--fg-2)' }}>Password</label>
+            <Link to="/forgot-password" style={{ fontSize: '12px', color: 'var(--butter)', textDecoration: 'none' }}>Forgot password?</Link>
+          </div>
           <input
             type="password"
             value={password}
