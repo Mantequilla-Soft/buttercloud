@@ -227,6 +227,7 @@ After=network.target
 Type=simple
 User=${INSTALL_USER}
 WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${INSTALL_DIR}/.env
 ExecStart=${NODE_BIN} index.js
 Restart=on-failure
 RestartSec=5
