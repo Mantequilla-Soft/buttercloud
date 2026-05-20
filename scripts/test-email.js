@@ -2,8 +2,27 @@
 // Quick SMTP connectivity test — reads config from .env
 // Usage: node scripts/test-email.js your@email.com
 
-import 'dotenv/config';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
+
+// Parse .env manually — bypasses dotenvx interception issues
+const envPath = resolve(fileURLToPath(import.meta.url), '../../.env');
+try {
+  const lines = readFileSync(envPath, 'utf8').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim();
+    if (key && !(key in process.env)) process.env[key] = val;
+  }
+} catch (e) {
+  console.warn('Could not read .env:', e.message);
+}
 
 const to = process.argv[2];
 if (!to) {
