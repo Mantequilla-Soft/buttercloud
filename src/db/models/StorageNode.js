@@ -7,6 +7,10 @@ export class StorageNodeModel {
       _id: new ObjectId(),
       name: data.name,
       endpoint: data.endpoint,
+      // Own credentials, if this node isn't the default MinIO backend sharing the
+      // global MINIO_ROOT_USER/PASSWORD. See services/nodeCredentials.js.
+      access_key_encrypted: data.access_key_encrypted || null,
+      secret_key_encrypted: data.secret_key_encrypted || null,
       capacity_total_bytes: data.capacity_total_bytes,
       capacity_used_bytes: 0,
       status: 'healthy',

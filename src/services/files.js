@@ -2,16 +2,18 @@ import * as Minio from 'minio';
 import { BucketModel } from '../db/models/Bucket.js';
 import { StorageNodeModel } from '../db/models/StorageNode.js';
 import { config } from '../config.js';
+import { resolveNodeCredentials } from './nodeCredentials.js';
 
-function getMinioClient(node) {
+export function getMinioClient(node) {
   const endpoint = node ? node.endpoint : config.minio.internalEndpoint;
   const url = new URL(endpoint);
+  const { accessKey, secretKey } = resolveNodeCredentials(node);
   return new Minio.Client({
     endPoint: url.hostname,
     port: parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80),
     useSSL: url.protocol === 'https:',
-    accessKey: config.minio.rootUser,
-    secretKey: config.minio.rootPassword,
+    accessKey,
+    secretKey,
   });
 }
 

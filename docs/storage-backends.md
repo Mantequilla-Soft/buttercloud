@@ -34,21 +34,27 @@ The function is called `proxyToMinIO` for historical reasons. It could as well b
    node --input-type=module <<'EOF'
    import { connectDB, disconnectDB } from './src/db/index.js';
    import { StorageNodeModel } from './src/db/models/StorageNode.js';
+   import { encryptCredential } from './src/services/nodeCredentials.js';
    await connectDB();
    await StorageNodeModel.create({
      name: 'my-new-backend',
      endpoint: 'https://your-backend-endpoint',
      capacity_total_bytes: 10 * 1024 ** 4, // 10 TB
      region: 'us-east-1',
+     // Omit these two if this backend shares the global MINIO_ROOT_USER/PASSWORD
+     // (only true if it's literally the same MinIO deployment). A genuinely
+     // different backend/software gets its own credentials here instead.
+     access_key_encrypted: encryptCredential('your-access-key'),
+     secret_key_encrypted: encryptCredential('your-secret-key'),
    });
    console.log('Node registered');
    await disconnectDB();
    EOF
    ```
 
-   Or use **Admin → Nodes → Add Node** in the dashboard.
+   Or use **Admin → Nodes → Add Node** in the dashboard, which takes `access_key`/`secret_key` fields directly and encrypts them before storing (`NODE_CREDENTIALS_KEY` must be set in `.env` — a 32-byte key, hex-encoded — before you register a node with its own credentials).
 
-3. **Update `.env`** if you are also replacing the node used for credential management:
+3. **Update `.env`** only if you're replacing the *default* node that nothing else overrides credentials for:
 
    ```env
    MINIO_INTERNAL_ENDPOINT=https://your-backend-endpoint
@@ -58,7 +64,7 @@ The function is called `proxyToMinIO` for historical reasons. It could as well b
 
 4. **Migrate existing buckets** (zero-downtime) via **Admin → Buckets → Migrate**.
 
-No code changes. No redeployment needed except to restart after `.env` changes.
+No code changes needed for a new node — each one carries its own credentials (or falls back to the global ones above), so two nodes running genuinely different software with different admin accounts can coexist.
 
 ---
 

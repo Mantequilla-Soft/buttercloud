@@ -1,14 +1,15 @@
 import * as Minio from 'minio';
-import { config } from '../config.js';
+import { resolveNodeCredentials } from './nodeCredentials.js';
 
 function makeClient(node) {
   const url = new URL(node.endpoint);
+  const { accessKey, secretKey } = resolveNodeCredentials(node);
   return new Minio.Client({
     endPoint: url.hostname,
     port: parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80),
     useSSL: url.protocol === 'https:',
-    accessKey: config.minio.rootUser,
-    secretKey: config.minio.rootPassword,
+    accessKey,
+    secretKey,
   });
 }
 

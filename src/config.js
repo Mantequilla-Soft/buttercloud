@@ -28,6 +28,14 @@ export const config = {
     internalEndpoint: process.env.MINIO_INTERNAL_ENDPOINT || 'http://localhost:9000',
   },
 
+  // Security
+  security: {
+    // 32-byte (64 hex char) key for encrypting per-node storage credentials at rest.
+    // Only required once you register a node with its own access/secret key instead
+    // of relying on the global MINIO_ROOT_USER/PASSWORD fallback.
+    nodeCredentialsKey: process.env.NODE_CREDENTIALS_KEY || '',
+  },
+
   // Hashing
   hashing: {
     apiKeyHashRounds: parseInt(process.env.API_KEY_HASH_ROUNDS || '10'),

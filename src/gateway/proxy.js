@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { BucketModel } from '../db/models/Bucket.js';
 import { StorageNodeModel } from '../db/models/StorageNode.js';
-import { config } from '../config.js';
+import { resolveNodeCredentials } from '../services/nodeCredentials.js';
 
 /**
  * Proxy S3 request to the appropriate MinIO node
@@ -25,8 +25,11 @@ export async function proxyToMinIO(request, bucketName) {
     throw error;
   }
 
-  // Re-sign the request with MinIO admin credentials
+  // Re-sign the request with this node's own admin credentials (falls back to the
+  // global MinIO root credentials for nodes that don't have their own — see
+  // services/nodeCredentials.js).
   const minioUrl = `${node.endpoint}${request.url}`;
+  const { accessKey, secretKey } = resolveNodeCredentials(node);
 
   try {
     // Forward the request to MinIO. responseType: 'stream' is the key piece here —
@@ -48,8 +51,8 @@ export async function proxyToMinIO(request, bucketName) {
       headers: buildProxyHeaders(request),
       data: request.body,
       auth: {
-        username: config.minio.rootUser,
-        password: config.minio.rootPassword,
+        username: accessKey,
+        password: secretKey,
       },
       validateStatus: () => true, // Don't throw on any status code
       maxRedirects: 0,
@@ -120,10 +123,11 @@ export async function headObjectInMinIO(bucketName, objectKey) {
     const node = await StorageNodeModel.findById(bucket.node_id.toString());
     if (!node) return 0;
 
+    const { accessKey, secretKey } = resolveNodeCredentials(node);
     const response = await axios({
       method: 'HEAD',
       url: `${node.endpoint}/${bucketName}/${objectKey}`,
-      auth: { username: config.minio.rootUser, password: config.minio.rootPassword },
+      auth: { username: accessKey, password: secretKey },
       validateStatus: () => true,
       timeout: 10000,
     });
