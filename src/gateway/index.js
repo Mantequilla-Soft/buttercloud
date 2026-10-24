@@ -3,6 +3,7 @@ import { checkUploadQuota, checkBucketCreationQuota, getUserQuotaInfo } from './
 import { proxyToMinIO, validateBucketOwnership, headObjectInMinIO } from './proxy.js';
 import { trackUsageAsync, trackUpload, trackDownload, trackDelete, trackList, trackPresign, trackBucketCreate, trackBucketDelete } from '../services/usage.js';
 import { createBucketInMinIO, getMinioClient } from '../services/files.js';
+import { isUploadSuspended } from '../services/suspension.js';
 import { BucketModel } from '../db/models/Bucket.js';
 import { StorageNodeModel } from '../db/models/StorageNode.js';
 import { UserModel } from '../db/models/User.js';
@@ -67,6 +68,17 @@ export async function registerS3Gateway(fastify) {
         const bucketName = pathParts[0];
         const objectKey = pathParts.slice(1).join('/') || null;
         const method = request.method;
+
+        // Suspension blocks new writes only — never reads or deletes, so a
+        // suspended customer can always still retrieve or clean up their own data.
+        // Covers bucket creation (PUT, no objectKey) and object upload/multipart
+        // (PUT/POST, with objectKey) in one place.
+        if ((method === 'PUT' || method === 'POST') && await isUploadSuspended(userId)) {
+          return reply.code(403).send({
+            Code: 'AccountSuspended',
+            Message: 'This account is suspended for non-payment. Uploads are blocked until the overdue invoice is paid.',
+          });
+        }
 
         // ============================================
         // BUCKET OPERATIONS

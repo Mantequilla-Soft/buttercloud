@@ -2,6 +2,9 @@ import { requireAdmin } from '../../middleware/adminAuth.js';
 import { UserModel } from '../../db/models/User.js';
 import { BucketModel } from '../../db/models/Bucket.js';
 import { QuotaModel } from '../../db/models/Quota.js';
+import { isUploadSuspended } from '../../services/suspension.js';
+
+const VALID_SUSPENSION_OVERRIDES = new Set([null, 'suspended', 'exempt']);
 
 export async function registerAdminUserRoutes(fastify) {
   // GET /api/v1/admin/users
@@ -23,6 +26,8 @@ export async function registerAdminUserRoutes(fastify) {
           email: user.email,
           plan: user.plan,
           is_admin: user.is_admin || false,
+          suspension_override: user.suspension_override || null,
+          is_suspended: await isUploadSuspended(user._id.toString()),
           company_name: user.company_name,
           created_at: user.created_at,
           active: user.active,
@@ -51,7 +56,7 @@ export async function registerAdminUserRoutes(fastify) {
       if (!(await requireAdmin(request, reply))) return;
 
       const { userId } = request.params;
-      const { plan, active, company_name, is_admin } = request.body;
+      const { plan, active, company_name, is_admin, suspension_override } = request.body;
 
       let newQuota = null;
       if (plan !== undefined) {
@@ -61,11 +66,19 @@ export async function registerAdminUserRoutes(fastify) {
         }
       }
 
+      if (suspension_override !== undefined && !VALID_SUSPENSION_OVERRIDES.has(suspension_override)) {
+        return reply.code(400).send({
+          error: 'invalid_suspension_override',
+          message: `suspension_override must be null, "suspended", or "exempt"`,
+        });
+      }
+
       const updateData = {};
       if (plan !== undefined) updateData.plan = plan;
       if (active !== undefined) updateData.active = active;
       if (company_name !== undefined) updateData.company_name = company_name;
       if (is_admin !== undefined) updateData.is_admin = Boolean(is_admin);
+      if (suspension_override !== undefined) updateData.suspension_override = suspension_override;
 
       const existing = await UserModel.findById(userId);
       if (!existing) {
@@ -91,6 +104,7 @@ export async function registerAdminUserRoutes(fastify) {
         email: existing.email,
         plan: updateData.plan ?? existing.plan,
         is_admin: updateData.is_admin ?? (existing.is_admin || false),
+        suspension_override: 'suspension_override' in updateData ? updateData.suspension_override : (existing.suspension_override || null),
         company_name: updateData.company_name ?? existing.company_name,
         active: updateData.active ?? existing.active,
       });

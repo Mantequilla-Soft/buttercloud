@@ -240,4 +240,33 @@ describe('PATCH /api/v1/admin/users/:userId', () => {
     const after = await get('/api/v1/admin/users', { Authorization: `Bearer ${token}` });
     expect(after.statusCode).toBe(403);
   });
+
+  it('rejects an invalid suspension_override value', async () => {
+    const { token } = await createAdminUser();
+    const { id } = await createRegularUser();
+
+    const res = await patch(
+      `/api/v1/admin/users/${id}`,
+      { suspension_override: 'banned' },
+      { Authorization: `Bearer ${token}` },
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('can force-suspend a user via suspension_override, reflected in the user list', async () => {
+    const { token } = await createAdminUser();
+    const { id } = await createRegularUser();
+
+    const patchRes = await patch(
+      `/api/v1/admin/users/${id}`,
+      { suspension_override: 'suspended' },
+      { Authorization: `Bearer ${token}` },
+    );
+    expect(patchRes.statusCode).toBe(200);
+    expect(patchRes.json().suspension_override).toBe('suspended');
+
+    const { users } = (await get('/api/v1/admin/users', { Authorization: `Bearer ${token}` })).json();
+    const forced = users.find(u => u.id === id);
+    expect(forced.is_suspended).toBe(true);
+  });
 });

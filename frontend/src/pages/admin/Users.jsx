@@ -14,15 +14,22 @@ const PLAN_COLOR = {
   house:        { color: 'var(--sage)',   bg: 'oklch(0.76 0.1 150 / .14)' },
 };
 
+const SUSPENSION_LABELS = {
+  null: 'Normal (based on billing)',
+  suspended: 'Force suspended',
+  exempt: 'Exempt from suspension',
+};
+
 function EditModal({ user, onSave, onCancel }) {
   const [plan, setPlan] = useState(user.plan);
   const [active, setActive] = useState(user.active);
   const [isAdmin, setIsAdmin] = useState(user.is_admin || false);
+  const [suspensionOverride, setSuspensionOverride] = useState(user.suspension_override || null);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
-    await onSave(user.id, { plan, active, is_admin: isAdmin });
+    await onSave(user.id, { plan, active, is_admin: isAdmin, suspension_override: suspensionOverride });
     setSaving(false);
   }
 
@@ -79,6 +86,26 @@ function EditModal({ user, onSave, onCancel }) {
           <span style={{ fontSize: '13px', color: 'var(--fg-1)' }}>
             {isAdmin ? 'Admin' : 'Not an admin'}
           </span>
+        </div>
+
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '6px' }}>
+            Upload suspension
+          </label>
+          <select
+            value={suspensionOverride ?? 'null'}
+            onChange={e => setSuspensionOverride(e.target.value === 'null' ? null : e.target.value)}
+            style={{ width: '100%', padding: '9px 12px', background: 'var(--bg)', border: '1px solid var(--line-soft)', borderRadius: '8px', color: 'var(--fg)', fontFamily: 'inherit', fontSize: '13px' }}
+          >
+            <option value="null">{SUSPENSION_LABELS.null}</option>
+            <option value="suspended">{SUSPENSION_LABELS.suspended}</option>
+            <option value="exempt">{SUSPENSION_LABELS.exempt}</option>
+          </select>
+          <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--fg-3)' }}>
+            Normally, uploads are blocked automatically once an invoice has been overdue
+            past the grace period, and unblocked the moment it's paid. Override only to
+            force one or the other regardless of billing status.
+          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
@@ -177,6 +204,11 @@ export default function Users() {
                 <span style={{ fontSize: '11px', color: user.active ? 'var(--sage)' : 'var(--fg-3)' }}>
                   {user.active ? '● Active' : '○ Off'}
                 </span>
+                {user.is_suspended && (
+                  <div style={{ fontSize: '10px', color: 'var(--coral)', marginTop: '2px' }}>
+                    Suspended
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button onClick={() => setEditing(user)} className="btn ghost" style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}>

@@ -59,7 +59,7 @@ export class BucketModel {
       },
       { returnDocument: 'after' }
     );
-    return result.value;
+    return result;
   }
 
   static async incrementUsage(bucketId, bytes) {

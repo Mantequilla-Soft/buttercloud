@@ -48,6 +48,12 @@ export const config = {
     maxBucketsPerUser: parseInt(process.env.MAX_BUCKETS_PER_USER || '1'),
   },
 
+  // Billing suspension — how many days an invoice can sit overdue before uploads
+  // are blocked for that account. See src/services/suspension.js.
+  billing: {
+    suspensionGraceDays: parseInt(process.env.SUSPENSION_GRACE_DAYS || '30'),
+  },
+
   // Rate Limiting
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '1000'),

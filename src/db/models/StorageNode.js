@@ -54,7 +54,7 @@ export class StorageNodeModel {
       },
       { returnDocument: 'after' }
     );
-    return result.value;
+    return result;
   }
 
   static async updateHealth(nodeId, status) {

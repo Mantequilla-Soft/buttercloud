@@ -86,7 +86,7 @@ export class BillingRecordModel {
       },
       { returnDocument: 'after' }
     );
-    return result.value;
+    return result;
   }
 
   static async markPaid(recordId) {
@@ -114,6 +114,19 @@ export class BillingRecordModel {
     }
 
     return overdue;
+  }
+
+  /**
+   * True if this user has any invoice that's been overdue for longer than the
+   * given grace period (i.e. its due_date is further in the past than cutoffDate).
+   */
+  static async hasInvoiceOverdueBeyond(userId, cutoffDate) {
+    const record = await billingRecords().findOne({
+      user_id: new ObjectId(userId),
+      status: 'overdue',
+      due_date: { $lt: cutoffDate },
+    });
+    return !!record;
   }
 
   static async listByStatus(status, limit = 100, offset = 0) {

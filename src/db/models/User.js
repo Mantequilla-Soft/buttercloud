@@ -9,6 +9,10 @@ export class UserModel {
       password_hash: data.password_hash,
       plan: data.plan || 'free',
       is_admin: data.is_admin || false,
+      // null (default) = suspension is derived from overdue invoices; 'suspended' /
+      // 'exempt' are explicit admin overrides that short-circuit that derivation —
+      // see src/services/suspension.js.
+      suspension_override: data.suspension_override || null,
       company_name: data.company_name || null,
       created_at: new Date(),
       updated_at: new Date(),
@@ -52,7 +56,7 @@ export class UserModel {
       },
       { returnDocument: 'after' }
     );
-    return result.value;
+    return result;
   }
 
   static async list(filter = {}, limit = 50, offset = 0) {
