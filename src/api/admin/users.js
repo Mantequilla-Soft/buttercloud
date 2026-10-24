@@ -2,6 +2,7 @@ import { requireAdmin } from '../../middleware/adminAuth.js';
 import { UserModel } from '../../db/models/User.js';
 import { BucketModel } from '../../db/models/Bucket.js';
 import { QuotaModel } from '../../db/models/Quota.js';
+import { CreditModel } from '../../db/models/Credit.js';
 import { isUploadSuspended } from '../../services/suspension.js';
 import { getClientProfile } from '../../services/clientProfile.js';
 
@@ -20,6 +21,47 @@ export async function registerAdminUserRoutes(fastify) {
       }
 
       return reply.code(200).send(profile);
+    } catch (error) {
+      return reply.code(500).send({ error: 'internal_error', message: error.message });
+    }
+  });
+
+  // POST /api/v1/admin/users/:userId/credits — issue a standing credit, consumed
+  // by that user's next generated invoice(s). For waiving one specific invoice
+  // right now, use POST /api/v1/admin/billing/:invoiceId/comp instead.
+  fastify.post('/api/v1/admin/users/:userId/credits', async (request, reply) => {
+    try {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const { userId } = request.params;
+      const { amount_cents, reason } = request.body || {};
+
+      if (!Number.isInteger(amount_cents) || amount_cents <= 0) {
+        return reply.code(400).send({
+          error: 'invalid_amount',
+          message: 'amount_cents must be a positive integer',
+        });
+      }
+
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        return reply.code(404).send({ error: 'not_found', message: 'User not found' });
+      }
+
+      const credit = await CreditModel.create({
+        user_id: userId,
+        amount_cents,
+        reason: reason || null,
+        created_by: request.user.id,
+      });
+
+      return reply.code(201).send({
+        id: credit._id.toString(),
+        user_id: userId,
+        amount_cents: credit.amount_cents,
+        reason: credit.reason,
+        created_at: credit.created_at,
+      });
     } catch (error) {
       return reply.code(500).send({ error: 'internal_error', message: error.message });
     }

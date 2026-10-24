@@ -66,3 +66,7 @@ export function quotas() {
 export function auditLog() {
   return getDB().collection('audit_log');
 }
+
+export function credits() {
+  return getDB().collection('credits');
+}

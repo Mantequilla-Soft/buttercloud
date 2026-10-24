@@ -4,6 +4,7 @@ import { StorageNodeModel } from '../db/models/StorageNode.js';
 import { UsageMetricModel } from '../db/models/UsageMetric.js';
 import { BillingRecordModel } from '../db/models/BillingRecord.js';
 import { QuotaModel } from '../db/models/Quota.js';
+import { CreditModel } from '../db/models/Credit.js';
 import { isUploadSuspended } from './suspension.js';
 
 function gb(bytes) {
@@ -53,6 +54,7 @@ export function serializeInvoice(invoice) {
     base_fee_usd: invoice.base_fee,
     subtotal_usd: invoice.subtotal,
     tax_usd: invoice.tax,
+    credit_usd: invoice.credit_cents || 0,
     total_usd: invoice.total,
     status: invoice.status,
     due_date: invoice.due_date.toISOString(),
@@ -70,12 +72,13 @@ export async function getClientProfile(userId) {
   const user = await UserModel.findById(userId);
   if (!user) return null;
 
-  const [bucket, usageHistory, billingResult, quota, suspended] = await Promise.all([
+  const [bucket, usageHistory, billingResult, quota, suspended, creditsResult] = await Promise.all([
     BucketModel.findByUserId(userId),
     getUsageHistory(userId, 6),
     BillingRecordModel.listByUser(userId, 12, 0),
     QuotaModel.findByPlan(user.plan),
     isUploadSuspended(userId),
+    CreditModel.listByUser(userId, 20, 0),
   ]);
 
   const node = bucket ? await StorageNodeModel.findById(bucket.node_id.toString()) : null;
@@ -107,5 +110,13 @@ export async function getClientProfile(userId) {
     usage_history: usageHistory,
     invoices: billingResult.items.map(serializeInvoice),
     invoice_total: billingResult.total,
+    credits: creditsResult.items.map(c => ({
+      id: c._id.toString(),
+      amount_usd: c.amount_cents,
+      reason: c.reason,
+      created_at: c.created_at,
+      applied_to_invoice_id: c.applied_to_invoice_id?.toString() || null,
+      applied_at: c.applied_at,
+    })),
   };
 }

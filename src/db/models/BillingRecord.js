@@ -27,6 +27,7 @@ export class BillingRecordModel {
       base_fee: data.base_fee || 0,
       subtotal: data.subtotal || 0,
       tax: data.tax || 0,
+      credit_cents: data.credit_cents || 0,
       total: data.total || 0,
       status: 'draft',
       payment_received_at: null,

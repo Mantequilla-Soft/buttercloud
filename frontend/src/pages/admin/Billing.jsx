@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { useAuth } from '../../hooks/useAuth';
-import { getAdminBilling, generateInvoices, updateInvoice } from '../../api/admin';
+import { getAdminBilling, generateInvoices, updateInvoice, compInvoice } from '../../api/admin';
 import { I } from '../../components/Icons';
 
 async function fetchPaymentConfig() {
@@ -9,14 +9,17 @@ async function fetchPaymentConfig() {
   return r.ok ? r.json() : { hive_account: null, currencies: [], memo_prefix: 'BC-' };
 }
 
-const STATUS_TABS = ['draft', 'pending', 'paid', 'overdue'];
+const STATUS_TABS = ['draft', 'pending', 'paid', 'overdue', 'comped'];
 
 const STATUS_STYLE = {
   draft:   { color: 'var(--fg-2)',   bg: 'var(--bg-3)' },
   pending: { color: 'var(--butter)', bg: 'oklch(0.85 0.135 90 / .14)' },
   paid:    { color: 'var(--sage)',   bg: 'oklch(0.78 0.105 145 / .14)' },
   overdue: { color: 'var(--coral)',  bg: 'oklch(0.72 0.145 25 / .14)' },
+  comped:  { color: 'var(--sky)',    bg: 'oklch(0.78 0.085 230 / .14)' },
 };
+
+const COMPABLE_STATUSES = new Set(['draft', 'pending', 'overdue']);
 
 function cents(v) { return `$${(v / 100).toFixed(2)}`; }
 
@@ -116,6 +119,13 @@ export default function AdminBilling() {
     } catch (e) { setError(e.message); }
   }
 
+  async function handleComp(id) {
+    try {
+      await compInvoice(token, id, 'Comped from admin dashboard');
+      await load();
+    } catch (e) { setError(e.message); }
+  }
+
   const totalRevenue = invoices.reduce((s, i) => s + i.total_usd, 0);
 
   return (
@@ -201,6 +211,11 @@ export default function AdminBilling() {
                   {inv.status === 'draft' && (
                     <button onClick={() => handleStatus(inv.id, 'pending')} className="btn" style={{ height: '26px', padding: '0 8px', fontSize: '11px' }}>
                       Send
+                    </button>
+                  )}
+                  {COMPABLE_STATUSES.has(inv.status) && (
+                    <button onClick={() => handleComp(inv.id)} className="btn ghost" style={{ height: '26px', padding: '0 8px', fontSize: '11px' }}>
+                      Comp
                     </button>
                   )}
                 </div>

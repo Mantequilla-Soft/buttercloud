@@ -13,6 +13,7 @@ const STATUS_STYLE = {
   pending: { color: 'var(--butter)', bg: 'oklch(0.85 0.135 90 / .14)' },
   overdue: { color: 'var(--coral)',  bg: 'oklch(0.72 0.145 25 / .14)' },
   draft:   { color: 'var(--fg-2)',   bg: 'var(--bg-3)' },
+  comped:  { color: 'var(--sky)',    bg: 'oklch(0.78 0.085 230 / .14)' },
 };
 
 function cents(v) {

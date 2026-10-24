@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import AdminLayout from '../../components/AdminLayout';
 import { useAuth } from '../../hooks/useAuth';
-import { getClientProfile, updateUser } from '../../api/admin';
+import { getClientProfile, updateUser, issueCredit, compInvoice } from '../../api/admin';
 import { I } from '../../components/Icons';
 
 const PLANS = ['free', 'starter', 'professional', 'enterprise', 'house'];
@@ -21,7 +21,10 @@ const INVOICE_STATUS_STYLE = {
   pending: { color: 'var(--butter)', bg: 'oklch(0.85 0.135 90 / .14)' },
   overdue: { color: 'var(--coral)',  bg: 'oklch(0.72 0.145 25 / .14)' },
   draft:   { color: 'var(--fg-2)',   bg: 'var(--bg-3)' },
+  comped:  { color: 'var(--sky)',    bg: 'oklch(0.78 0.085 230 / .14)' },
 };
+
+const COMPABLE_STATUSES = new Set(['draft', 'pending', 'overdue']);
 
 function cents(v) { return `$${(v / 100).toFixed(2)}`; }
 function gb(bytes) { return (bytes / 1024 ** 3).toFixed(2); }
@@ -87,6 +90,12 @@ export default function ClientDetail() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [suspensionOverride, setSuspensionOverride] = useState(null);
 
+  // Credits / comping
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditReason, setCreditReason] = useState('');
+  const [issuingCredit, setIssuingCredit] = useState(false);
+  const [compingId, setCompingId] = useState(null);
+
   useEffect(() => { if (token) load(); }, [token, id]);
 
   async function load() {
@@ -111,6 +120,31 @@ export default function ClientDetail() {
     finally { setSaving(false); }
   }
 
+  async function handleIssueCredit() {
+    const amount_cents = Math.round(parseFloat(creditAmount) * 100);
+    if (!Number.isInteger(amount_cents) || amount_cents <= 0) {
+      setError('Enter a valid credit amount');
+      return;
+    }
+    setIssuingCredit(true);
+    try {
+      await issueCredit(token, id, { amount_cents, reason: creditReason || undefined });
+      setCreditAmount('');
+      setCreditReason('');
+      await load();
+    } catch (e) { setError(e.message); }
+    finally { setIssuingCredit(false); }
+  }
+
+  async function handleComp(invoiceId) {
+    setCompingId(invoiceId);
+    try {
+      await compInvoice(token, invoiceId, 'Comped from admin dashboard');
+      await load();
+    } catch (e) { setError(e.message); }
+    finally { setCompingId(null); }
+  }
+
   if (loading) {
     return <AdminLayout title="Client"><div style={{ padding: '40px', textAlign: 'center', color: 'var(--fg-2)' }}>Loading…</div></AdminLayout>;
   }
@@ -118,7 +152,7 @@ export default function ClientDetail() {
     return <AdminLayout title="Client"><div style={{ padding: '40px', textAlign: 'center', color: 'var(--fg-2)' }}>{error || 'Not found'}</div></AdminLayout>;
   }
 
-  const { user, bucket, usage_history, invoices } = profile;
+  const { user, bucket, usage_history, invoices, credits } = profile;
   const ps = PLAN_COLOR[user.plan] || PLAN_COLOR.free;
   const latestUsage = usage_history[usage_history.length - 1] || { storage_avg_gb: 0, upload_gb: 0, download_gb: 0 };
   const quotaPct = bucket && bucket.quota_bytes > 0 ? (bucket.current_usage_bytes / bucket.quota_bytes) * 100 : 0;
@@ -176,18 +210,36 @@ export default function ClientDetail() {
             </div>
           ) : (
             <div className="files">
-              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
-                <span>Period</span><span>Due</span><span style={{ textAlign: 'right' }}>Total</span><span style={{ textAlign: 'right' }}>Status</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px 70px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
+                <span>Period</span><span>Due</span><span style={{ textAlign: 'right' }}>Total</span><span style={{ textAlign: 'right' }}>Status</span><span></span>
               </div>
               {invoices.map(inv => {
                 const s = INVOICE_STATUS_STYLE[inv.status] || INVOICE_STATUS_STYLE.draft;
+                const compable = COMPABLE_STATUSES.has(inv.status);
                 return (
-                  <div key={inv.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px', gap: '10px', padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', alignItems: 'center' }}>
+                  <div key={inv.id} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px 70px', gap: '10px', padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', alignItems: 'center' }}>
                     <div className="mono" style={{ fontSize: '12px', color: 'var(--fg-1)' }}>{inv.month}</div>
                     <div className="mono" style={{ fontSize: '12px', color: 'var(--fg-2)' }}>{new Date(inv.due_date).toLocaleDateString()}</div>
-                    <div className="mono" style={{ textAlign: 'right', fontSize: '13px', fontWeight: 600, color: 'var(--fg)' }}>{cents(inv.total_usd)}</div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--fg)' }}>{cents(inv.total_usd)}</div>
+                      {inv.credit_usd > 0 && (
+                        <div className="mono" style={{ fontSize: '10.5px', color: 'var(--sky)' }}>-{cents(inv.credit_usd)} credit</div>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                       <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '10.5px', fontWeight: 500, color: s.color, background: s.bg }}>{inv.status}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      {compable && (
+                        <button
+                          onClick={() => handleComp(inv.id)}
+                          disabled={compingId === inv.id}
+                          className="btn ghost"
+                          style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
+                        >
+                          {compingId === inv.id ? '…' : 'Comp'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -196,6 +248,7 @@ export default function ClientDetail() {
           )}
         </div>
 
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '20px' }}>
           <h3 style={{ margin: '0 0 16px', fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>Account</h3>
 
@@ -236,6 +289,54 @@ export default function ClientDetail() {
           <button className="btn primary" onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
+        </div>
+
+        <div style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '20px' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>Credits</h3>
+
+          {credits.length === 0 ? (
+            <div style={{ fontSize: '12px', color: 'var(--fg-3)', marginBottom: '16px' }}>No credits issued yet.</div>
+          ) : (
+            <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {credits.map(c => (
+                <div key={c.id} style={{ fontSize: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--line-soft)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span className="mono" style={{ color: 'var(--sky)', fontWeight: 600 }}>{cents(c.amount_usd)}</span>
+                    <span style={{ color: c.applied_to_invoice_id ? 'var(--sage)' : 'var(--fg-3)' }}>
+                      {c.applied_to_invoice_id ? 'Applied' : 'Unapplied'}
+                    </span>
+                  </div>
+                  {c.reason && <div style={{ color: 'var(--fg-2)', marginTop: '2px' }}>{c.reason}</div>}
+                  <div style={{ color: 'var(--fg-3)', marginTop: '2px', fontSize: '11px' }}>{new Date(c.created_at).toLocaleDateString()}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '6px' }}>Issue a credit</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={creditAmount}
+            onChange={e => setCreditAmount(e.target.value)}
+            placeholder="Amount in USD, e.g. 10.00"
+            style={{ width: '100%', padding: '9px 12px', marginBottom: '8px', background: 'var(--bg)', border: '1px solid var(--line-soft)', borderRadius: '8px', color: 'var(--fg)', fontFamily: 'inherit', fontSize: '13px', boxSizing: 'border-box' }}
+          />
+          <input
+            value={creditReason}
+            onChange={e => setCreditReason(e.target.value)}
+            placeholder="Reason (optional)"
+            style={{ width: '100%', padding: '9px 12px', marginBottom: '12px', background: 'var(--bg)', border: '1px solid var(--line-soft)', borderRadius: '8px', color: 'var(--fg)', fontFamily: 'inherit', fontSize: '13px', boxSizing: 'border-box' }}
+          />
+          <button className="btn ghost" onClick={handleIssueCredit} disabled={issuingCredit} style={{ width: '100%' }}>
+            {issuingCredit ? 'Issuing…' : 'Issue Credit'}
+          </button>
+          <p style={{ margin: '8px 0 0', fontSize: '11px', color: 'var(--fg-3)' }}>
+            Applied automatically to this client's next generated invoice(s). To waive one
+            specific invoice right now instead, use "Comp" on it in the billing history.
+          </p>
+        </div>
         </div>
       </div>
     </AdminLayout>

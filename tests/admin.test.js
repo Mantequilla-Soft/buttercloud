@@ -4,7 +4,10 @@ import { UserModel } from '../src/db/models/User.js';
 import { BucketModel } from '../src/db/models/Bucket.js';
 import { QuotaModel } from '../src/db/models/Quota.js';
 import { StorageNodeModel } from '../src/db/models/StorageNode.js';
+import { BillingRecordModel } from '../src/db/models/BillingRecord.js';
+import { CreditModel } from '../src/db/models/Credit.js';
 import { createToken } from '../src/services/auth.js';
+import { generateInvoiceForUser } from '../src/services/billing.js';
 import { getDB } from '../src/db/index.js';
 
 let app;
@@ -52,6 +55,9 @@ function get(url, headers = {}) {
 }
 function patch(url, payload, headers = {}) {
   return app.inject({ method: 'PATCH', url, payload, headers });
+}
+function post(url, payload, headers = {}) {
+  return app.inject({ method: 'POST', url, payload, headers });
 }
 
 // ─── GET /api/v1/admin/users ─────────────────────────────────────────────────
@@ -303,6 +309,84 @@ describe('GET /api/v1/admin/users/:userId', () => {
   it('returns 403 for a non-admin', async () => {
     const { token } = await createRegularUser();
     const res = await get('/api/v1/admin/users/000000000000000000000000', { Authorization: `Bearer ${token}` });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ─── POST /api/v1/admin/users/:userId/credits ──────────────────────────────────
+
+describe('POST /api/v1/admin/users/:userId/credits', () => {
+  it('issues a credit, attributed to the issuing admin', async () => {
+    const { user: admin, token } = await createAdminUser();
+    const { id } = await createRegularUser();
+
+    const res = await post(
+      `/api/v1/admin/users/${id}/credits`,
+      { amount_cents: 500, reason: 'goodwill' },
+      { Authorization: `Bearer ${token}` },
+    );
+    expect(res.statusCode).toBe(201);
+    expect(res.json().amount_cents).toBe(500);
+
+    const { items } = await CreditModel.listByUser(id);
+    expect(items).toHaveLength(1);
+    expect(items[0].created_by.toString()).toBe(admin._id.toString());
+    expect(items[0].applied_to_invoice_id).toBeNull();
+  });
+
+  it('rejects a non-positive amount', async () => {
+    const { token } = await createAdminUser();
+    const { id } = await createRegularUser();
+
+    const res = await post(
+      `/api/v1/admin/users/${id}/credits`,
+      { amount_cents: 0 },
+      { Authorization: `Bearer ${token}` },
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 403 for a non-admin', async () => {
+    const { token } = await createRegularUser('a@example.com');
+    const { id } = await createRegularUser('b@example.com');
+
+    const res = await post(
+      `/api/v1/admin/users/${id}/credits`,
+      { amount_cents: 500 },
+      { Authorization: `Bearer ${token}` },
+    );
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+// ─── POST /api/v1/admin/billing/:invoiceId/comp ────────────────────────────────
+
+describe('POST /api/v1/admin/billing/:invoiceId/comp', () => {
+  it('comps an invoice and returns the waived amount', async () => {
+    const { token } = await createAdminUser();
+    const { id } = await createRegularUser();
+    await QuotaModel.create({ plan: 'free', storage_gb: 0.5, monthly_transfer_gb: 5, base_monthly_usd: 999 });
+
+    const { record: invoice } = await generateInvoiceForUser(id, '2025-01');
+
+    const res = await post(`/api/v1/admin/billing/${invoice._id.toString()}/comp`, { reason: 'test' }, { Authorization: `Bearer ${token}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().comped_amount_cents).toBe(999);
+
+    const updated = await BillingRecordModel.findById(invoice._id.toString());
+    expect(updated.status).toBe('comped');
+    expect(updated.total).toBe(0);
+  });
+
+  it('returns 404 for an unknown invoice', async () => {
+    const { token } = await createAdminUser();
+    const res = await post('/api/v1/admin/billing/000000000000000000000000/comp', {}, { Authorization: `Bearer ${token}` });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 403 for a non-admin', async () => {
+    const { token } = await createRegularUser();
+    const res = await post('/api/v1/admin/billing/000000000000000000000000/comp', {}, { Authorization: `Bearer ${token}` });
     expect(res.statusCode).toBe(403);
   });
 });

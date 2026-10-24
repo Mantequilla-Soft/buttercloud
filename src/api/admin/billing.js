@@ -1,7 +1,7 @@
 import { requireAdmin } from '../../middleware/adminAuth.js';
 import { BillingRecordModel } from '../../db/models/BillingRecord.js';
 import { UserModel } from '../../db/models/User.js';
-import { generateMonthlyInvoices, generateInvoiceForUser, previousMonth, currentMonth } from '../../services/billing.js';
+import { generateMonthlyInvoices, generateInvoiceForUser, previousMonth, currentMonth, compInvoice } from '../../services/billing.js';
 import { sendInvoiceEmail } from '../../services/email.js';
 import { config } from '../../config.js';
 
@@ -28,6 +28,7 @@ export async function registerAdminBillingRoutes(fastify) {
           transfer_charge_usd: inv.transfer_charge,
           subtotal_usd: inv.subtotal,
           tax_usd: inv.tax,
+          credit_usd: inv.credit_cents || 0,
           total_usd: inv.total,
           status: inv.status,
           due_date: inv.due_date.toISOString(),
@@ -106,6 +107,31 @@ export async function registerAdminBillingRoutes(fastify) {
       return reply.code(200).send({ id: invoiceId, status });
     } catch (error) {
       return reply.code(500).send({ error: 'update_failed', message: error.message });
+    }
+  });
+
+  // POST /api/v1/admin/billing/:invoiceId/comp — waive an invoice immediately.
+  // Issues a credit for exactly what's left owed and marks the invoice 'comped'
+  // (not 'paid') so revenue reporting can tell the two apart.
+  fastify.post('/api/v1/admin/billing/:invoiceId/comp', async (request, reply) => {
+    try {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const { invoiceId } = request.params;
+      const { reason } = request.body || {};
+
+      const result = await compInvoice(invoiceId, request.user.id, reason);
+
+      return reply.code(200).send({
+        id: invoiceId,
+        status: 'comped',
+        comped_amount_cents: result.comped_amount_cents,
+      });
+    } catch (error) {
+      return reply.code(error.statusCode || 500).send({
+        error: error.statusCode === 404 ? 'not_found' : error.statusCode === 400 ? 'invalid_request' : 'comp_failed',
+        message: error.message,
+      });
     }
   });
 }

@@ -6,8 +6,9 @@ import { UserModel } from '../src/db/models/User.js';
 import { QuotaModel } from '../src/db/models/Quota.js';
 import { BucketModel } from '../src/db/models/Bucket.js';
 import { StorageNodeModel } from '../src/db/models/StorageNode.js';
-import { markOverdueAndNotify, generateInvoiceForUser } from '../src/services/billing.js';
+import { markOverdueAndNotify, generateInvoiceForUser, compInvoice } from '../src/services/billing.js';
 import { checkAndSendQuotaWarnings } from '../src/services/quotaWarnings.js';
+import { CreditModel } from '../src/db/models/Credit.js';
 import { getDB } from '../src/db/index.js';
 
 const GB = 1024 ** 3;
@@ -266,5 +267,122 @@ describe('generateInvoiceForUser() — unbilled accounts', () => {
     expect(skipped).toBe(false);
     expect(record.total).toBe(0);
     expect(record.base_fee).toBe(0);
+  });
+});
+
+// ─── credits applied during invoice generation ─────────────────────────────────
+
+describe('applyCreditsToInvoice (via generateInvoiceForUser)', () => {
+  it('reduces the invoice total by an unapplied credit and marks it applied', async () => {
+    const user = await createUser('credit@example.com', 'starter');
+    await QuotaModel.create({ plan: 'starter', storage_gb: 10, monthly_transfer_gb: 100, base_monthly_usd: 1000 });
+
+    const credit = await CreditModel.create({
+      user_id: user._id.toString(), amount_cents: 300, reason: 'test credit', created_by: user._id.toString(),
+    });
+
+    const { record } = await generateInvoiceForUser(user._id.toString(), '2025-01');
+
+    expect(record.base_fee).toBe(1000);
+    expect(record.credit_cents).toBe(300);
+    expect(record.total).toBe(700);
+
+    const updatedCredit = await CreditModel.findById(credit._id.toString());
+    expect(updatedCredit.applied_to_invoice_id.toString()).toBe(record._id.toString());
+  });
+
+  it('consumes multiple credits oldest-first, stopping once the invoice is covered', async () => {
+    const user = await createUser('multi@example.com', 'starter');
+    await QuotaModel.create({ plan: 'starter', storage_gb: 10, monthly_transfer_gb: 100, base_monthly_usd: 1000 });
+
+    const c1 = await CreditModel.create({ user_id: user._id.toString(), amount_cents: 400, created_by: user._id.toString() });
+    const c2 = await CreditModel.create({ user_id: user._id.toString(), amount_cents: 400, created_by: user._id.toString() });
+    const c3 = await CreditModel.create({ user_id: user._id.toString(), amount_cents: 400, created_by: user._id.toString() });
+
+    const { record } = await generateInvoiceForUser(user._id.toString(), '2025-01');
+
+    expect(record.credit_cents).toBe(1000); // capped at the amount owed
+    expect(record.total).toBe(0);
+
+    expect((await CreditModel.findById(c1._id.toString())).applied_to_invoice_id).toBeTruthy();
+    expect((await CreditModel.findById(c2._id.toString())).applied_to_invoice_id).toBeTruthy();
+    // c1+c2 = 800, still short of 1000, so c3 is also consumed even though it
+    // overshoots — credits aren't split, see applyCreditsToInvoice's doc comment.
+    expect((await CreditModel.findById(c3._id.toString())).applied_to_invoice_id).toBeTruthy();
+  });
+
+  it('leaves an untouched credit available when earlier ones already cover the invoice', async () => {
+    const user = await createUser('leftover@example.com', 'starter');
+    await QuotaModel.create({ plan: 'starter', storage_gb: 10, monthly_transfer_gb: 100, base_monthly_usd: 500 });
+
+    const c1 = await CreditModel.create({ user_id: user._id.toString(), amount_cents: 500, created_by: user._id.toString() });
+    const c2 = await CreditModel.create({ user_id: user._id.toString(), amount_cents: 500, created_by: user._id.toString() });
+
+    const { record } = await generateInvoiceForUser(user._id.toString(), '2025-01');
+
+    expect(record.total).toBe(0);
+    expect((await CreditModel.findById(c1._id.toString())).applied_to_invoice_id).toBeTruthy();
+    expect((await CreditModel.findById(c2._id.toString())).applied_to_invoice_id).toBeFalsy();
+  });
+
+  it('floors the invoice total at 0 and reports only the effective discount', async () => {
+    const user = await createUser('over@example.com', 'starter');
+    await QuotaModel.create({ plan: 'starter', storage_gb: 10, monthly_transfer_gb: 100, base_monthly_usd: 500 });
+
+    await CreditModel.create({ user_id: user._id.toString(), amount_cents: 5000, created_by: user._id.toString() });
+
+    const { record } = await generateInvoiceForUser(user._id.toString(), '2025-01');
+    expect(record.total).toBe(0);
+    expect(record.credit_cents).toBe(500); // not 5000 — bounded by what was actually owed
+  });
+});
+
+// ─── compInvoice() ──────────────────────────────────────────────────────────────
+
+describe('compInvoice()', () => {
+  it('waives the remaining total, issues a matching credit, and marks the invoice comped', async () => {
+    const user = await createUser('comp@example.com', 'starter');
+    await QuotaModel.create({ plan: 'starter', storage_gb: 10, monthly_transfer_gb: 100, base_monthly_usd: 1200 });
+    const { record: invoice } = await generateInvoiceForUser(user._id.toString(), '2025-01');
+    expect(invoice.total).toBe(1200);
+
+    const result = await compInvoice(invoice._id.toString(), user._id.toString(), 'service outage');
+
+    expect(result.comped_amount_cents).toBe(1200);
+    expect(result.record.status).toBe('comped');
+    expect(result.record.total).toBe(0);
+
+    const { items } = await CreditModel.listByUser(user._id.toString());
+    expect(items).toHaveLength(1);
+    expect(items[0].amount_cents).toBe(1200);
+    expect(items[0].applied_to_invoice_id.toString()).toBe(invoice._id.toString());
+    expect(items[0].reason).toBe('service outage');
+  });
+
+  it('does not create a credit for an invoice that is already $0', async () => {
+    const user = await createUser('zero@example.com', 'house');
+    await QuotaModel.create({ plan: 'house', storage_gb: 1000, monthly_transfer_gb: 1000, base_monthly_usd: 0 });
+    const { record: invoice } = await generateInvoiceForUser(user._id.toString(), '2025-01');
+    expect(invoice.total).toBe(0);
+
+    const result = await compInvoice(invoice._id.toString(), user._id.toString());
+    expect(result.comped_amount_cents).toBe(0);
+    expect(result.record.status).toBe('comped');
+
+    const { items } = await CreditModel.listByUser(user._id.toString());
+    expect(items).toHaveLength(0);
+  });
+
+  it('rejects comping an already-paid invoice', async () => {
+    const user = await createUser('paid@example.com', 'starter');
+    await QuotaModel.create({ plan: 'starter', storage_gb: 10, monthly_transfer_gb: 100, base_monthly_usd: 1000 });
+    const { record: invoice } = await generateInvoiceForUser(user._id.toString(), '2025-01');
+    await BillingRecordModel.markPaid(invoice._id.toString());
+
+    await expect(compInvoice(invoice._id.toString(), user._id.toString())).rejects.toThrow(/already paid/);
+  });
+
+  it('throws a 404-flagged error for an unknown invoice', async () => {
+    await expect(compInvoice(new ObjectId().toString(), new ObjectId().toString())).rejects.toMatchObject({ statusCode: 404 });
   });
 });
