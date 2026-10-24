@@ -172,7 +172,7 @@ export default function AdminBilling() {
       )}
 
       <div className="files">
-        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 80px 90px 90px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 80px 90px 230px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
           <span>Month</span><span>User</span><span style={{ textAlign: 'right' }}>Base</span><span style={{ textAlign: 'right' }}>Extra</span><span style={{ textAlign: 'right' }}>Total</span><span></span>
         </div>
 
@@ -193,7 +193,7 @@ export default function AdminBilling() {
           const showPaymentHint = inv.status === 'pending' && paymentConfig?.hive_account;
           return (
             <div key={inv.id} style={{ borderBottom: '1px solid var(--line-soft)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 80px 90px 90px', gap: '10px', padding: '12px 16px', alignItems: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 80px 90px 230px', gap: '10px', padding: '12px 16px', alignItems: 'center' }}>
                 <div className="mono" style={{ fontSize: '12px', color: 'var(--fg-1)' }}>{inv.month}</div>
                 <div>
                   <div style={{ fontSize: '13px', color: 'var(--fg)' }}>{inv.user_email}</div>
