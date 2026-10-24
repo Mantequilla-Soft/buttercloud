@@ -46,6 +46,16 @@ export async function createServer() {
     limits: { fileSize: 50 * 1024 * 1024 * 1024 }, // 50 GB hard cap
   });
 
+  // Fastify only parses application/json and text/plain out of the box — any other
+  // content-type (which is what every real S3 client sends for object bodies, e.g.
+  // application/octet-stream) would 415 before reaching the S3 gateway at all. This
+  // catch-all hands the raw request stream back as request.body without buffering
+  // it, so proxyToMinIO can pipe it straight through to the storage backend (same
+  // streaming approach used on the response side — see src/gateway/proxy.js).
+  fastify.addContentTypeParser('*', (request, payload, done) => {
+    done(null, payload);
+  });
+
   // JWT middleware for protected API routes
   const PUBLIC_PATHS = new Set([
     '/api/v1/auth/signup',

@@ -89,7 +89,6 @@ function buildProxyHeaders(request) {
     'trailers',
     'transfer-encoding',
     'upgrade',
-    'content-length', // Will be recalculated
   ];
 
   hopHeaders.forEach(header => {
@@ -102,14 +101,10 @@ function buildProxyHeaders(request) {
   // Keep x-amz-* headers (except x-amz-date and x-amz-security-token for re-signing)
   // Actually, MinIO doesn't need these for now, but we could implement re-signing
 
-  // Set content-length if there's a body
-  if (request.body) {
-    if (typeof request.body === 'string') {
-      headers['content-length'] = Buffer.byteLength(request.body);
-    } else {
-      headers['content-length'] = request.body.length;
-    }
-  }
+  // content-length is left as-is from the original request: request.body is the same
+  // bytes the client sent (now a raw stream for most content-types — see the
+  // catch-all content-type parser in server.js), so its length hasn't changed. It
+  // can't be recomputed from request.body itself once that's a stream.
 
   return headers;
 }
