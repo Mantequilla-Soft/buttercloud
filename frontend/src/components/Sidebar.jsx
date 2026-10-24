@@ -45,6 +45,20 @@ export default function Sidebar() {
             {item.label}
           </Link>
         ))}
+
+        {user?.is_admin && (
+          <>
+            <div className="nav-section">Admin</div>
+            <Link
+              to="/admin"
+              className={`nav-item ${location.pathname.startsWith('/admin') ? 'active' : ''}`}
+              style={{ textDecoration: 'none', color: 'var(--coral)' }}
+            >
+              {I.gauge({ size: 18 })}
+              Admin Dashboard
+            </Link>
+          </>
+        )}
       </nav>
 
       <div className="usage-card">
