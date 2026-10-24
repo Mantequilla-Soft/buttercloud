@@ -119,6 +119,26 @@ export async function trackList(userId, bucketName) {
 }
 
 /**
+ * Track a presigned URL issuance (not the eventual download against it, which
+ * happens directly against the storage backend and isn't visible to Buttercloud)
+ */
+export async function trackPresign(userId, bucketName, objectKey) {
+  const now = new Date();
+  const month = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1);
+
+  await UsageMetricModel.getOrCreate(userId, month);
+  await UsageMetricModel.incrementRequest(userId, month, 'get');
+
+  await AuditLogModel.log({
+    user_id: userId,
+    action: 'presign',
+    resource_type: 'object',
+    resource_name: `${bucketName}/${objectKey}`,
+    result: 'success',
+  });
+}
+
+/**
  * Track a bucket creation
  */
 export async function trackBucketCreate(userId, bucketName, quotaBytes) {

@@ -10,6 +10,7 @@ function makeClient(node) {
     useSSL: url.protocol === 'https:',
     accessKey,
     secretKey,
+    region: 'us-east-1', // matches the region every bucket is created with
   });
 }
 

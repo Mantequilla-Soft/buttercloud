@@ -14,6 +14,10 @@ export function getMinioClient(node) {
     useSSL: url.protocol === 'https:',
     accessKey,
     secretKey,
+    // Every bucket here is created with 'us-east-1' (see createBucketInMinIO /
+    // migration.js) — setting it explicitly skips the SDK's own getBucketRegion()
+    // network round-trip on every call, including presignedGetObject.
+    region: 'us-east-1',
   });
 }
 

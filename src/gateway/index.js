@@ -1,8 +1,8 @@
 import { validateS3Auth } from '../middleware/s3auth.js';
 import { checkUploadQuota, checkBucketCreationQuota, getUserQuotaInfo } from './quota.js';
 import { proxyToMinIO, validateBucketOwnership, headObjectInMinIO } from './proxy.js';
-import { trackUsageAsync, trackUpload, trackDownload, trackDelete, trackList, trackBucketCreate, trackBucketDelete } from '../services/usage.js';
-import { createBucketInMinIO } from '../services/files.js';
+import { trackUsageAsync, trackUpload, trackDownload, trackDelete, trackList, trackPresign, trackBucketCreate, trackBucketDelete } from '../services/usage.js';
+import { createBucketInMinIO, getMinioClient } from '../services/files.js';
 import { BucketModel } from '../db/models/Bucket.js';
 import { StorageNodeModel } from '../db/models/StorageNode.js';
 import { UserModel } from '../db/models/User.js';
@@ -107,6 +107,11 @@ export async function registerS3Gateway(fastify) {
             // Upload or multipart
             return handlePutObject(request, reply, userId, bucketName, objectKey);
           case 'GET':
+            // ?presign mints a presigned URL instead of proxying the object itself —
+            // see handlePresignObject.
+            if (request.query.presign !== undefined) {
+              return handlePresignObject(request, reply, userId, bucketName, objectKey);
+            }
             // Download
             return handleGetObject(request, reply, userId, bucketName, objectKey);
           case 'DELETE':
@@ -266,6 +271,52 @@ async function handleGetObject(request, reply, userId, bucketName, objectKey) {
   }
 
   return reply.code(response.status).headers(response.headers).send(response.body);
+}
+
+const MAX_PRESIGN_EXPIRY_SECONDS = 24 * 60 * 60; // 1 day
+const DEFAULT_PRESIGN_EXPIRY_SECONDS = 60 * 60; // 1 hour
+
+/**
+ * GET /{bucket}/{key}?presign[&expires=<seconds>]
+ *
+ * Mints a presigned URL pointing directly at the storage node instead of proxying
+ * the object through this process. Lets a CDN (or any client) fetch the object
+ * directly from the backend after one authenticated call here, instead of every
+ * cache-fill request transiting proxyToMinIO. Auth/ownership is checked once, here —
+ * the URL itself carries its own time-boxed authorization after that.
+ *
+ * Note: the minted URL uses the node's own `endpoint`. For a managed backend
+ * (R2, B2, Wasabi, S3) that's already publicly reachable and this just works. For a
+ * self-hosted node kept behind a firewall (as the default MinIO deployment is, per
+ * docs/storage-backends.md's Nginx guide), the endpoint needs its own public
+ * exposure for these URLs to be reachable — otherwise keep using the regular proxied
+ * GET for that node.
+ */
+async function handlePresignObject(request, reply, userId, bucketName, objectKey) {
+  const bucket = await validateBucketOwnership(bucketName, userId);
+
+  const requested = parseInt(request.query.expires, 10);
+  const expiresIn = Number.isFinite(requested) && requested > 0
+    ? Math.min(requested, MAX_PRESIGN_EXPIRY_SECONDS)
+    : DEFAULT_PRESIGN_EXPIRY_SECONDS;
+
+  const node = await StorageNodeModel.findById(bucket.node_id.toString());
+  if (!node) {
+    return reply.code(500).send({ Code: 'InternalError', Message: 'Storage node not found' });
+  }
+
+  const client = getMinioClient(node);
+  const url = await client.presignedGetObject(bucketName, objectKey, expiresIn);
+
+  trackUsageAsync(() => trackPresign(userId, bucketName, objectKey));
+
+  return reply.code(200).send({
+    url,
+    bucket: bucketName,
+    key: objectKey,
+    expires_in: expiresIn,
+    expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+  });
 }
 
 async function handleDeleteObject(request, reply, userId, bucketName, objectKey) {
