@@ -29,7 +29,19 @@ export async function proxyToMinIO(request, bucketName) {
   const minioUrl = `${node.endpoint}${request.url}`;
 
   try {
-    // Forward the request to MinIO
+    // Forward the request to MinIO. responseType: 'stream' is the key piece here —
+    // without it axios buffers the entire object body into memory (response.data)
+    // before we see any of it, which is unworkable for multi-GB video objects under
+    // concurrent requests. With it, response.data is a Node Readable we pipe straight
+    // through to the client via reply.send(), so memory use stays flat regardless of
+    // object size.
+    //
+    // `timeout` here only bounds the time to receive response headers (axios clears
+    // it via handleResponse once headers arrive). After that, Node's underlying
+    // socket timeout takes over, which is activity-based — it resets on every chunk
+    // received, so a large object that's actively streaming (even slowly) is never
+    // killed by it. Only a backend that never responds, or a transfer that stalls
+    // completely for the full duration, trips it.
     const response = await axios({
       method: request.method,
       url: minioUrl,
@@ -42,6 +54,7 @@ export async function proxyToMinIO(request, bucketName) {
       validateStatus: () => true, // Don't throw on any status code
       maxRedirects: 0,
       timeout: 30000,
+      responseType: 'stream',
     });
 
     return {
