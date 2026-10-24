@@ -83,6 +83,17 @@ export async function createServer() {
       wildcard: false,
       index: false,
       serve: true,
+      // index.html must always be revalidated — it's what points the browser at
+      // the current build's content-hashed asset filenames, so a stale cached
+      // copy keeps serving an old JS bundle after every deploy. Everything under
+      // /assets/ is safe to cache hard: Vite hashes the filename itself, so a
+      // changed file is a new URL, never a mutated one.
+      setHeaders: (res, path) => {
+        res.setHeader(
+          'Cache-Control',
+          path.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable'
+        );
+      },
     });
   }
 
