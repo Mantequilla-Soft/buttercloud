@@ -51,7 +51,7 @@ export function AuthProvider({ children }) {
     }
 
     // Backend returns user data flat, not nested under 'user'
-    const userObj = { id: data.id, email: data.email, plan: data.plan };
+    const userObj = { id: data.id, email: data.email, plan: data.plan, is_admin: data.is_admin };
     console.log('Setting user:', userObj, 'token:', data.token?.substring(0, 20) + '...');
     localStorage.setItem('token', data.token);
     setToken(data.token);
@@ -74,7 +74,7 @@ export function AuthProvider({ children }) {
     }
 
     // Backend returns user data flat, not nested under 'user'
-    const userObj = { id: data.id, email: data.email, plan: data.plan };
+    const userObj = { id: data.id, email: data.email, plan: data.plan, is_admin: data.is_admin };
     console.log('Setting user:', userObj, 'token:', data.token?.substring(0, 20) + '...');
     localStorage.setItem('token', data.token);
     setToken(data.token);

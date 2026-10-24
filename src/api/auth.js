@@ -73,6 +73,7 @@ export async function registerAuthRoutes(fastify) {
         id: user.id,
         email: user.email,
         plan: user.plan,
+        is_admin: dbUser?.is_admin ?? false,
         email_verified: dbUser?.email_verified ?? false,
       });
     } catch (error) {

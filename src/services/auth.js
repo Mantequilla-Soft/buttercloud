@@ -149,6 +149,7 @@ export async function registerUser(email, password, companyName) {
     id: user._id.toString(),
     email: user.email,
     plan: user.plan,
+    is_admin: user.is_admin,
     company_name: user.company_name,
     created_at: user.created_at,
     token,
@@ -190,6 +191,7 @@ export async function loginUser(email, password) {
     id: user._id.toString(),
     email: user.email,
     plan: user.plan,
+    is_admin: user.is_admin,
     token,
     expires_in: config.jwt.expirationSeconds,
   };

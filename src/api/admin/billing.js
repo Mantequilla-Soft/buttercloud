@@ -1,21 +1,15 @@
-import { validateJWT } from '../../middleware/jwt.js';
+import { requireAdmin } from '../../middleware/adminAuth.js';
 import { BillingRecordModel } from '../../db/models/BillingRecord.js';
 import { UserModel } from '../../db/models/User.js';
 import { generateMonthlyInvoices, generateInvoiceForUser, previousMonth, currentMonth } from '../../services/billing.js';
 import { sendInvoiceEmail } from '../../services/email.js';
 import { config } from '../../config.js';
 
-function isAdmin(plan) {
-  return plan === 'admin' || plan === 'enterprise';
-}
-
 export async function registerAdminBillingRoutes(fastify) {
   // GET /api/v1/admin/billing — list all invoices across all users
   fastify.get('/api/v1/admin/billing', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return;
-      if (!isAdmin(request.user.plan)) return reply.code(403).send({ error: 'forbidden' });
+      if (!(await requireAdmin(request, reply))) return;
 
       const { status, limit = 50, offset = 0 } = request.query;
       const result = await BillingRecordModel.listByStatus(status || 'draft', parseInt(limit), parseInt(offset));
@@ -50,9 +44,7 @@ export async function registerAdminBillingRoutes(fastify) {
   // POST /api/v1/admin/billing/generate — generate invoices for a month
   fastify.post('/api/v1/admin/billing/generate', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return;
-      if (!isAdmin(request.user.plan)) return reply.code(403).send({ error: 'forbidden' });
+      if (!(await requireAdmin(request, reply))) return;
 
       // Default: generate for previous month (the completed billing period)
       const month = request.body?.month || previousMonth();
@@ -71,9 +63,7 @@ export async function registerAdminBillingRoutes(fastify) {
   // PATCH /api/v1/admin/billing/:invoiceId — update status (mark paid, finalize, etc.)
   fastify.patch('/api/v1/admin/billing/:invoiceId', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return;
-      if (!isAdmin(request.user.plan)) return reply.code(403).send({ error: 'forbidden' });
+      if (!(await requireAdmin(request, reply))) return;
 
       const { invoiceId } = request.params;
       const { status } = request.body;

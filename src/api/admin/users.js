@@ -1,27 +1,12 @@
-import { validateJWT } from '../../middleware/jwt.js';
+import { requireAdmin } from '../../middleware/adminAuth.js';
 import { UserModel } from '../../db/models/User.js';
 import { BucketModel } from '../../db/models/Bucket.js';
-
-/**
- * Check if user is admin (currently: anyone with 'admin' plan)
- */
-function isAdmin(userPlan) {
-  return userPlan === 'admin' || userPlan === 'enterprise';
-}
 
 export async function registerAdminUserRoutes(fastify) {
   // GET /api/v1/admin/users
   fastify.get('/api/v1/admin/users', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return; // Auth failed
-
-      if (!isAdmin(request.user.plan)) {
-        return reply.code(403).send({
-          error: 'forbidden',
-          message: 'Admin access required',
-        });
-      }
+      if (!(await requireAdmin(request, reply))) return;
 
       const limit = Math.min(parseInt(request.query.limit || '50'), 100);
       const offset = parseInt(request.query.offset || '0');
@@ -36,6 +21,7 @@ export async function registerAdminUserRoutes(fastify) {
           id: user._id.toString(),
           email: user.email,
           plan: user.plan,
+          is_admin: user.is_admin || false,
           company_name: user.company_name,
           created_at: user.created_at,
           active: user.active,
@@ -61,23 +47,16 @@ export async function registerAdminUserRoutes(fastify) {
   // PATCH /api/v1/admin/users/:userId
   fastify.patch('/api/v1/admin/users/:userId', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return; // Auth failed
-
-      if (!isAdmin(request.user.plan)) {
-        return reply.code(403).send({
-          error: 'forbidden',
-          message: 'Admin access required',
-        });
-      }
+      if (!(await requireAdmin(request, reply))) return;
 
       const { userId } = request.params;
-      const { plan, active, company_name } = request.body;
+      const { plan, active, company_name, is_admin } = request.body;
 
       const updateData = {};
       if (plan !== undefined) updateData.plan = plan;
       if (active !== undefined) updateData.active = active;
       if (company_name !== undefined) updateData.company_name = company_name;
+      if (is_admin !== undefined) updateData.is_admin = Boolean(is_admin);
 
       const existing = await UserModel.findById(userId);
       if (!existing) {
@@ -90,6 +69,7 @@ export async function registerAdminUserRoutes(fastify) {
         id: existing._id.toString(),
         email: existing.email,
         plan: updateData.plan ?? existing.plan,
+        is_admin: updateData.is_admin ?? (existing.is_admin || false),
         company_name: updateData.company_name ?? existing.company_name,
         active: updateData.active ?? existing.active,
       });

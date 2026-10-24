@@ -4,24 +4,24 @@ import { useAuth } from '../../hooks/useAuth';
 import { getUsers, updateUser } from '../../api/admin';
 import { I } from '../../components/Icons';
 
-const PLANS = ['free', 'starter', 'professional', 'enterprise', 'admin'];
+const PLANS = ['free', 'starter', 'professional', 'enterprise'];
 
 const PLAN_COLOR = {
   free:         { color: 'var(--fg-2)',   bg: 'var(--bg-3)' },
   starter:      { color: 'var(--sky)',    bg: 'oklch(0.78 0.085 230 / .14)' },
   professional: { color: 'var(--butter)', bg: 'oklch(0.85 0.135 90 / .14)' },
   enterprise:   { color: 'var(--plum)',   bg: 'oklch(0.74 0.115 320 / .14)' },
-  admin:        { color: 'var(--coral)',  bg: 'oklch(0.72 0.145 25 / .14)' },
 };
 
 function EditModal({ user, onSave, onCancel }) {
   const [plan, setPlan] = useState(user.plan);
   const [active, setActive] = useState(user.active);
+  const [isAdmin, setIsAdmin] = useState(user.is_admin || false);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
     setSaving(true);
-    await onSave(user.id, { plan, active });
+    await onSave(user.id, { plan, active, is_admin: isAdmin });
     setSaving(false);
   }
 
@@ -58,6 +58,26 @@ function EditModal({ user, onSave, onCancel }) {
             }} />
           </button>
           <span style={{ fontSize: '13px', color: 'var(--fg-1)' }}>{active ? 'Active' : 'Deactivated'}</span>
+        </div>
+
+        <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            type="button"
+            onClick={() => setIsAdmin(v => !v)}
+            style={{
+              width: 36, height: 20, borderRadius: '10px', border: 'none', cursor: 'pointer',
+              background: isAdmin ? 'var(--coral)' : 'var(--bg-3)',
+              position: 'relative', transition: 'background 0.2s',
+            }}
+          >
+            <span style={{
+              position: 'absolute', top: 2, left: isAdmin ? 18 : 2, width: 16, height: 16,
+              borderRadius: '50%', background: 'white', transition: 'left 0.2s',
+            }} />
+          </button>
+          <span style={{ fontSize: '13px', color: 'var(--fg-1)' }}>
+            {isAdmin ? 'Admin' : 'Not an admin'}
+          </span>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
@@ -133,7 +153,14 @@ export default function Users() {
           return (
             <div key={user.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 80px 80px', gap: '10px', padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', alignItems: 'center' }}>
               <div>
-                <div style={{ fontWeight: 500, fontSize: '13px', color: 'var(--fg)', marginBottom: '2px' }}>{user.email}</div>
+                <div style={{ fontWeight: 500, fontSize: '13px', color: 'var(--fg)', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {user.email}
+                  {user.is_admin && (
+                    <span style={{ padding: '1px 7px', borderRadius: '999px', fontSize: '10px', fontWeight: 500, color: 'var(--coral)', background: 'oklch(0.72 0.145 25 / .14)' }}>
+                      Admin
+                    </span>
+                  )}
+                </div>
                 {user.company_name && <div style={{ fontSize: '11.5px', color: 'var(--fg-2)' }}>{user.company_name}</div>}
                 <div style={{ fontSize: '11px', color: 'var(--fg-3)', marginTop: '2px' }}>
                   Joined {new Date(user.created_at).toLocaleDateString()}

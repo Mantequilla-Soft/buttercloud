@@ -27,10 +27,11 @@ async function createAdminUser() {
   const user = await UserModel.create({
     email: 'admin@example.com',
     password_hash: 'x',
-    plan: 'admin',
+    plan: 'free', // admin status is independent of billing plan
+    is_admin: true,
     email_verified: true,
   });
-  const token = createToken(user._id.toString(), user.email, 'admin');
+  const token = createToken(user._id.toString(), user.email, user.plan);
   return { user, token };
 }
 
@@ -70,21 +71,37 @@ describe('GET /api/v1/admin/users', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('returns 403 for a plan: enterprise user that is not an admin', async () => {
+    // Enterprise used to be treated as an admin plan — that conflation is removed.
+    // Billing plan and admin role are now fully independent.
+    const user = await UserModel.create({
+      email: 'enterprise@example.com',
+      password_hash: 'x',
+      plan: 'enterprise',
+      email_verified: true,
+    });
+    const token = createToken(user._id.toString(), user.email, 'enterprise');
+
+    const res = await get('/api/v1/admin/users', { Authorization: `Bearer ${token}` });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('returns 401 without a token', async () => {
     const res = await get('/api/v1/admin/users');
     expect(res.statusCode).toBe(401);
   });
 
-  it('each user entry includes id, email, plan, and active fields', async () => {
+  it('each user entry includes id, email, plan, is_admin, and active fields', async () => {
     const { token } = await createAdminUser();
     await createRegularUser();
 
     const { users } = (await get('/api/v1/admin/users', { Authorization: `Bearer ${token}` })).json();
-    const regular = users.find(u => u.plan === 'free');
+    const regular = users.find(u => u.email === 'user@example.com');
     expect(regular).toBeDefined();
     expect(regular.id).toBeTruthy();
     expect(regular.email).toBeTruthy();
     expect(regular.active).toBe(true);
+    expect(regular.is_admin).toBe(false);
   });
 });
 
@@ -147,5 +164,36 @@ describe('PATCH /api/v1/admin/users/:userId', () => {
     const { id } = await createRegularUser();
     const res = await patch(`/api/v1/admin/users/${id}`, { plan: 'starter' });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('can promote a regular user to admin via is_admin', async () => {
+    const { token: adminToken } = await createAdminUser();
+    const { id, token: userToken } = await createRegularUser();
+
+    const res = await patch(
+      `/api/v1/admin/users/${id}`,
+      { is_admin: true },
+      { Authorization: `Bearer ${adminToken}` },
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json().is_admin).toBe(true);
+
+    // Takes effect immediately on their existing token — no new login required,
+    // because admin status is checked against the database, not the JWT's plan claim.
+    const promoted = await get('/api/v1/admin/users', { Authorization: `Bearer ${userToken}` });
+    expect(promoted.statusCode).toBe(200);
+  });
+
+  it('revokes admin access immediately, without waiting for the token to expire', async () => {
+    const { user, token } = await createAdminUser();
+
+    const before = await get('/api/v1/admin/users', { Authorization: `Bearer ${token}` });
+    expect(before.statusCode).toBe(200);
+
+    await UserModel.update(user._id.toString(), { is_admin: false });
+
+    // Same still-valid token, but the database now says they're not an admin.
+    const after = await get('/api/v1/admin/users', { Authorization: `Bearer ${token}` });
+    expect(after.statusCode).toBe(403);
   });
 });

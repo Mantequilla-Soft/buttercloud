@@ -8,6 +8,7 @@ export class UserModel {
       email: data.email.toLowerCase(),
       password_hash: data.password_hash,
       plan: data.plan || 'free',
+      is_admin: data.is_admin || false,
       company_name: data.company_name || null,
       created_at: new Date(),
       updated_at: new Date(),

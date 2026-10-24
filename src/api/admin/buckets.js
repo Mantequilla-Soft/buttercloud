@@ -1,20 +1,14 @@
-import { validateJWT } from '../../middleware/jwt.js';
+import { requireAdmin } from '../../middleware/adminAuth.js';
 import { BucketModel } from '../../db/models/Bucket.js';
 import { UserModel } from '../../db/models/User.js';
 import { StorageNodeModel } from '../../db/models/StorageNode.js';
 import { migrateBucket, cleanupSourceBucket } from '../../services/migration.js';
 
-function isAdmin(plan) {
-  return plan === 'admin' || plan === 'enterprise';
-}
-
 export async function registerAdminBucketRoutes(fastify) {
   // GET /api/v1/admin/buckets — list all buckets with owner + node info
   fastify.get('/api/v1/admin/buckets', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return;
-      if (!isAdmin(request.user.plan)) return reply.code(403).send({ error: 'forbidden' });
+      if (!(await requireAdmin(request, reply))) return;
 
       // Get all nodes for lookup
       const nodes = await StorageNodeModel.findAll();
@@ -55,9 +49,7 @@ export async function registerAdminBucketRoutes(fastify) {
   // POST /api/v1/admin/buckets/:bucketId/migrate — migrate bucket to another node
   fastify.post('/api/v1/admin/buckets/:bucketId/migrate', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return;
-      if (!isAdmin(request.user.plan)) return reply.code(403).send({ error: 'forbidden' });
+      if (!(await requireAdmin(request, reply))) return;
 
       const { bucketId } = request.params;
       const { destination_node_id, cleanup_source = false } = request.body;

@@ -5,8 +5,8 @@ import { trackUsageAsync } from '../services/usage.js';
 import { listFiles, downloadFile, uploadFile, deleteFile, statFile } from '../services/files.js';
 
 async function assertVerified(user, reply) {
-  if (user.plan === 'admin' || user.plan === 'enterprise') return true;
   const dbUser = await UserModel.findById(user.id);
+  if (dbUser?.is_admin) return true;
   if (!dbUser?.email_verified) {
     reply.code(403).send({ error: 'email_not_verified', message: 'Please verify your email address before uploading files.' });
     return false;

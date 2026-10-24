@@ -109,6 +109,15 @@ describe('POST /api/v1/credentials', () => {
     expect(res.json().error).toBe('email_not_verified');
   });
 
+  it('exempts an unverified admin from the email-verification requirement', async () => {
+    const signupRes = await post('/api/v1/auth/signup', { email: 'unverified-admin@example.com', password: PASSWORD });
+    const { token, id } = signupRes.json();
+    await UserModel.update(id, { is_admin: true }); // still unverified, now an admin
+
+    const res = await post('/api/v1/credentials', { name: 'key' }, { Authorization: `Bearer ${token}` });
+    expect(res.statusCode).toBe(201);
+  });
+
   it('returns 401 without a token', async () => {
     const res = await post('/api/v1/credentials', { name: 'key' });
     expect(res.statusCode).toBe(401);

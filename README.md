@@ -162,19 +162,23 @@ Open `http://localhost:5173` — sign up, and your first bucket is automatically
 
 ### 6. Promote yourself to admin
 
+Admin status (`is_admin`) is independent of billing plan — promoting yourself doesn't change what plan you're on, and doesn't cost anything.
+
 ```bash
 node --input-type=module <<'EOF'
 import { connectDB, disconnectDB } from './src/db/index.js';
 import { UserModel } from './src/db/models/User.js';
 await connectDB();
 const user = await UserModel.findByEmail('your@email.com');
-await UserModel.update(user._id.toString(), { plan: 'admin' });
+await UserModel.update(user._id.toString(), { is_admin: true });
 console.log('Done');
 await disconnectDB();
 EOF
 ```
 
-Log out and back in — then navigate to `/admin`.
+Navigate to `/admin` — no need to log out and back in, admin status is checked against the database on every request, not baked into your existing session token.
+
+From here, additional admins can be added (or removed) from the Users page in the dashboard, or via `PATCH /api/v1/admin/users/:id` with `{ "is_admin": true }` — no new script needed.
 
 ## Architecture
 
@@ -286,7 +290,7 @@ GET    /api/v1/quota                    Quota limits for current plan
 GET    /api/v1/billing                  Invoice history
 ```
 
-Admin routes (require `plan: admin` or `plan: enterprise`):
+Admin routes (require `is_admin: true` on the requesting user):
 
 ```
 GET    /api/v1/admin/users                List users

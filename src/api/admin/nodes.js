@@ -1,29 +1,14 @@
-import { validateJWT } from '../../middleware/jwt.js';
+import { requireAdmin } from '../../middleware/adminAuth.js';
 import { StorageNodeModel } from '../../db/models/StorageNode.js';
 import { BucketModel } from '../../db/models/Bucket.js';
 import { reconcileNodeUsage } from '../../services/reconcile.js';
 import { encryptCredential } from '../../services/nodeCredentials.js';
 
-/**
- * Check if user is admin
- */
-function isAdmin(userPlan) {
-  return userPlan === 'admin' || userPlan === 'enterprise';
-}
-
 export async function registerAdminNodeRoutes(fastify) {
   // GET /api/v1/admin/nodes
   fastify.get('/api/v1/admin/nodes', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return; // Auth failed
-
-      if (!isAdmin(request.user.plan)) {
-        return reply.code(403).send({
-          error: 'forbidden',
-          message: 'Admin access required',
-        });
-      }
+      if (!(await requireAdmin(request, reply))) return;
 
       const nodes = await StorageNodeModel.findAll();
 
@@ -66,15 +51,7 @@ export async function registerAdminNodeRoutes(fastify) {
   // POST /api/v1/admin/nodes
   fastify.post('/api/v1/admin/nodes', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return; // Auth failed
-
-      if (!isAdmin(request.user.plan)) {
-        return reply.code(403).send({
-          error: 'forbidden',
-          message: 'Admin access required',
-        });
-      }
+      if (!(await requireAdmin(request, reply))) return;
 
       const { name, endpoint, capacity_total_gb, region, access_key, secret_key } = request.body;
 
@@ -136,9 +113,7 @@ export async function registerAdminNodeRoutes(fastify) {
   // PATCH /api/v1/admin/nodes/:nodeId
   fastify.patch('/api/v1/admin/nodes/:nodeId', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return;
-      if (!isAdmin(request.user.plan)) return reply.code(403).send({ error: 'forbidden' });
+      if (!(await requireAdmin(request, reply))) return;
 
       const { nodeId } = request.params;
       const { name, endpoint, capacity_total_gb, region, status, access_key, secret_key } = request.body;
@@ -185,9 +160,7 @@ export async function registerAdminNodeRoutes(fastify) {
   // POST /api/v1/admin/nodes/reconcile — sync capacity_used_bytes from bucket totals
   fastify.post('/api/v1/admin/nodes/reconcile', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return;
-      if (!isAdmin(request.user.plan)) return reply.code(403).send({ error: 'forbidden' });
+      if (!(await requireAdmin(request, reply))) return;
 
       const results = await reconcileNodeUsage();
       return reply.code(200).send({ reconciled: true, nodes: results });
@@ -199,15 +172,7 @@ export async function registerAdminNodeRoutes(fastify) {
   // GET /api/v1/admin/node-health
   fastify.get('/api/v1/admin/node-health', async (request, reply) => {
     try {
-      await validateJWT(request, reply);
-      if (!request.user) return; // Auth failed
-
-      if (!isAdmin(request.user.plan)) {
-        return reply.code(403).send({
-          error: 'forbidden',
-          message: 'Admin access required',
-        });
-      }
+      if (!(await requireAdmin(request, reply))) return;
 
       // Check health of all nodes
       const nodes = await StorageNodeModel.findAll();

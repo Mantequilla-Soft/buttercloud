@@ -3,9 +3,8 @@ import { generateCredential, listCredentials, revokeCredential } from '../servic
 import { UserModel } from '../db/models/User.js';
 
 async function assertVerified(request, reply) {
-  const plan = request.user?.plan;
-  if (plan === 'admin' || plan === 'enterprise') return true;
   const user = await UserModel.findById(request.user.id);
+  if (user?.is_admin) return true;
   if (!user?.email_verified) {
     reply.code(403).send({ error: 'email_not_verified', message: 'Please verify your email address before creating API credentials.' });
     return false;
