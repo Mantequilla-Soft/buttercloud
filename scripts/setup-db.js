@@ -74,6 +74,9 @@ async function createIndexes() {
     // audit_log (with TTL)
     { collection: 'audit_log', index: { expires_at: 1 }, options: { expireAfterSeconds: 0 } },
     { collection: 'audit_log', index: { user_id: 1, timestamp: 1 } },
+
+    // credits
+    { collection: 'credits', index: { user_id: 1, applied_to_invoice_id: 1 } },
   ];
 
   for (const { collection, index, options = {} } of indexes) {
