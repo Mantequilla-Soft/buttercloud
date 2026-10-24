@@ -12,7 +12,7 @@ function fmtStorage(gb) {
 import { I } from '../../components/Icons';
 
 function AddNodeModal({ onSave, onCancel }) {
-  const [form, setForm] = useState({ name: '', endpoint: '', capacity_total_gb: '', region: 'default' });
+  const [form, setForm] = useState({ name: '', endpoint: '', capacity_total_gb: '', region: 'default', access_key: '', secret_key: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -23,7 +23,10 @@ function AddNodeModal({ onSave, onCancel }) {
     setError('');
     setSaving(true);
     try {
-      await onSave({ ...form, capacity_total_gb: parseFloat(form.capacity_total_gb) });
+      const body = { ...form, capacity_total_gb: parseFloat(form.capacity_total_gb) };
+      if (!body.access_key) delete body.access_key;
+      if (!body.secret_key) delete body.secret_key;
+      await onSave(body);
     } catch (err) { setError(err.message); }
     finally { setSaving(false); }
   }
@@ -32,7 +35,7 @@ function AddNodeModal({ onSave, onCancel }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / .6)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <form onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px' }}>
+      <form onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
         <h3 style={{ margin: '0 0 20px', fontSize: '15px', fontWeight: 600 }}>Add Storage Node</h3>
 
         {error && <div style={{ padding: '10px 12px', marginBottom: '14px', background: 'oklch(0.72 0.145 25 / .15)', color: 'var(--coral)', borderRadius: '6px', fontSize: '12px' }}>{error}</div>}
@@ -49,6 +52,21 @@ function AddNodeModal({ onSave, onCancel }) {
               <input type={type || 'text'} style={inputStyle} placeholder={placeholder} value={form[key]} onChange={set(key)} required />
             </div>
           ))}
+
+          <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: '14px' }}>
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '5px' }}>Access Key (optional)</label>
+            <input type="text" style={inputStyle} placeholder="Leave blank to share the global MinIO credentials" value={form.access_key} onChange={set('access_key')} autoComplete="off" />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '5px' }}>Secret Key (optional)</label>
+            <input type="password" style={inputStyle} placeholder="Required only if Access Key is set" value={form.secret_key} onChange={set('secret_key')} autoComplete="new-password" />
+          </div>
+          <p style={{ margin: 0, fontSize: '11px', color: 'var(--fg-3)', lineHeight: 1.5 }}>
+            Leave both blank if this is the same MinIO deployment as your other nodes — it'll
+            use the global <span className="mono">MINIO_ROOT_USER</span>/<span className="mono">MINIO_ROOT_PASSWORD</span>.
+            Fill them in for a genuinely separate backend (different software, different admin
+            account). Stored encrypted — never shown again after this.
+          </p>
         </div>
 
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
@@ -67,6 +85,8 @@ function EditNodeModal({ node, onSave, onCancel }) {
     capacity_total_gb: node.capacity_total_gb,
     region: node.region,
     status: node.status,
+    access_key: '',
+    secret_key: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -78,7 +98,11 @@ function EditNodeModal({ node, onSave, onCancel }) {
     setError('');
     setSaving(true);
     try {
-      await onSave(node.id, { ...form, capacity_total_gb: parseFloat(form.capacity_total_gb) });
+      const body = { ...form, capacity_total_gb: parseFloat(form.capacity_total_gb) };
+      // Blank means "don't change" — the backend only rotates when both are present.
+      if (!body.access_key) delete body.access_key;
+      if (!body.secret_key) delete body.secret_key;
+      await onSave(node.id, body);
     } catch (err) { setError(err.message); }
     finally { setSaving(false); }
   }
@@ -87,7 +111,7 @@ function EditNodeModal({ node, onSave, onCancel }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / .6)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <form onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px' }}>
+      <form onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
         <h3 style={{ margin: '0 0 20px', fontSize: '15px', fontWeight: 600 }}>Edit Node — {node.name}</h3>
 
         {error && <div style={{ padding: '10px 12px', marginBottom: '14px', background: 'oklch(0.72 0.145 25 / .15)', color: 'var(--coral)', borderRadius: '6px', fontSize: '12px' }}>{error}</div>}
@@ -116,6 +140,18 @@ function EditNodeModal({ node, onSave, onCancel }) {
               <option value="inactive">inactive (disabled)</option>
               <option value="maintenance">maintenance</option>
             </select>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: '14px' }}>
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '5px' }}>
+              Rotate credentials {node.has_own_credentials ? '(this node has its own)' : '(currently shares the global credentials)'}
+            </label>
+            <input type="text" style={{ ...inputStyle, marginBottom: '10px' }} placeholder="New access key — leave blank to keep as-is" value={form.access_key} onChange={set('access_key')} autoComplete="off" />
+            <input type="password" style={inputStyle} placeholder="New secret key" value={form.secret_key} onChange={set('secret_key')} autoComplete="new-password" />
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--fg-3)', lineHeight: 1.5 }}>
+              Both fields are only used if both are filled in. Existing credentials (if any) are
+              never shown here — this always sets new ones, it doesn't display old ones.
+            </p>
           </div>
         </div>
 
@@ -225,6 +261,9 @@ export default function Nodes() {
                   }}>
                     <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
                     {node.status}
+                  </span>
+                  <span style={{ padding: '1px 8px', borderRadius: '999px', fontSize: '10.5px', color: 'var(--fg-2)', background: 'var(--bg-3)' }}>
+                    {node.has_own_credentials ? 'Own credentials' : 'Shared credentials'}
                   </span>
                 </div>
                 <div className="mono" style={{ fontSize: '12px', color: 'var(--fg-2)' }}>{node.endpoint}</div>

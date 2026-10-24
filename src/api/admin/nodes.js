@@ -32,6 +32,9 @@ export async function registerAdminNodeRoutes(fastify) {
             created_at: node.created_at,
             last_health_check: node.last_health_check,
             bucket_count: buckets.length,
+            // Never the credentials themselves, even encrypted — just whether this
+            // node has its own (vs. sharing the global MinIO root credentials).
+            has_own_credentials: Boolean(node.access_key_encrypted && node.secret_key_encrypted),
           };
         })
       );
