@@ -270,3 +270,39 @@ describe('PATCH /api/v1/admin/users/:userId', () => {
     expect(forced.is_suspended).toBe(true);
   });
 });
+
+// ─── GET /api/v1/admin/users/:userId — consolidated client profile ────────────
+
+describe('GET /api/v1/admin/users/:userId', () => {
+  it('returns identity, bucket, usage history, and billing in one response', async () => {
+    await StorageNodeModel.create({ name: 'test-node', endpoint: 'http://minio.test:9000', capacity_total_bytes: 1024 ** 4 });
+    await QuotaModel.create({ plan: 'free', storage_gb: 0.5, monthly_transfer_gb: 5 });
+
+    const { token } = await createAdminUser();
+    const { id } = await createRegularUser();
+
+    const res = await get(`/api/v1/admin/users/${id}`, { Authorization: `Bearer ${token}` });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json();
+    expect(body.user.email).toBe('user@example.com');
+    expect(body.user.plan).toBe('free');
+    expect(body.user.is_suspended).toBe(false);
+    expect(body.bucket).toBeTruthy();
+    expect(body.bucket.quota_bytes).toBe(Math.floor(0.5 * 1024 ** 3));
+    expect(body.usage_history).toHaveLength(6);
+    expect(body.invoices).toEqual([]);
+  });
+
+  it('returns 404 for an unknown user id', async () => {
+    const { token } = await createAdminUser();
+    const res = await get('/api/v1/admin/users/000000000000000000000000', { Authorization: `Bearer ${token}` });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 403 for a non-admin', async () => {
+    const { token } = await createRegularUser();
+    const res = await get('/api/v1/admin/users/000000000000000000000000', { Authorization: `Bearer ${token}` });
+    expect(res.statusCode).toBe(403);
+  });
+});

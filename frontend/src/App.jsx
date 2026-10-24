@@ -17,6 +17,7 @@ import Account from './pages/customer/Account';
 import Docs from './pages/customer/Docs';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/Users';
+import ClientDetail from './pages/admin/ClientDetail';
 import AdminNodes from './pages/admin/Nodes';
 import AdminBuckets from './pages/admin/Buckets';
 import AdminBilling from './pages/admin/Billing';
@@ -49,6 +50,7 @@ function App() {
 
           <Route path="/admin"          element={<A><AdminDashboard /></A>} />
           <Route path="/admin/users"   element={<A><AdminUsers /></A>} />
+          <Route path="/admin/users/:id" element={<A><ClientDetail /></A>} />
           <Route path="/admin/nodes"   element={<A><AdminNodes /></A>} />
           <Route path="/admin/buckets"  element={<A><AdminBuckets /></A>} />
           <Route path="/admin/billing" element={<A><AdminBilling /></A>} />

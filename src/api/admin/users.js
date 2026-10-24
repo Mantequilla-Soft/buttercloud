@@ -3,10 +3,28 @@ import { UserModel } from '../../db/models/User.js';
 import { BucketModel } from '../../db/models/Bucket.js';
 import { QuotaModel } from '../../db/models/Quota.js';
 import { isUploadSuspended } from '../../services/suspension.js';
+import { getClientProfile } from '../../services/clientProfile.js';
 
 const VALID_SUSPENSION_OVERRIDES = new Set([null, 'suspended', 'exempt']);
 
 export async function registerAdminUserRoutes(fastify) {
+  // GET /api/v1/admin/users/:userId — consolidated per-client profile: identity,
+  // bucket/quota, recent usage trend, and billing history in one read.
+  fastify.get('/api/v1/admin/users/:userId', async (request, reply) => {
+    try {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const profile = await getClientProfile(request.params.userId);
+      if (!profile) {
+        return reply.code(404).send({ error: 'not_found', message: 'User not found' });
+      }
+
+      return reply.code(200).send(profile);
+    } catch (error) {
+      return reply.code(500).send({ error: 'internal_error', message: error.message });
+    }
+  });
+
   // GET /api/v1/admin/users
   fastify.get('/api/v1/admin/users', async (request, reply) => {
     try {

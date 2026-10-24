@@ -12,6 +12,7 @@ async function req(token, path, opts = {}) {
 }
 
 export const getUsers    = (token, params = '') => req(token, `/api/v1/admin/users${params}`);
+export const getClientProfile = (token, id)    => req(token, `/api/v1/admin/users/${id}`);
 export const updateUser  = (token, id, body)   => req(token, `/api/v1/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 export const getNodes    = (token)             => req(token, '/api/v1/admin/nodes');
 export const addNode     = (token, body)       => req(token, '/api/v1/admin/nodes', { method: 'POST', body: JSON.stringify(body) });

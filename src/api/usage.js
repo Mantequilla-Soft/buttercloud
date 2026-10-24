@@ -3,6 +3,7 @@ import { UsageMetricModel } from '../db/models/UsageMetric.js';
 import { BillingRecordModel } from '../db/models/BillingRecord.js';
 import { BucketModel } from '../db/models/Bucket.js';
 import { getUserQuotaInfo } from '../gateway/quota.js';
+import { getUsageHistory, serializeInvoice } from '../services/clientProfile.js';
 
 export async function registerUsageRoutes(fastify) {
   // GET /api/v1/usage
@@ -92,29 +93,7 @@ export async function registerUsageRoutes(fastify) {
       await validateJWT(request, reply);
       if (!request.user) return;
 
-      const metrics = await UsageMetricModel.findLastNMonths(request.user.id, 6);
-      const metricsMap = Object.fromEntries(
-        metrics.map(m => [m.month.toISOString().substring(0, 7), m])
-      );
-
-      const history = [];
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date();
-        d.setUTCDate(1);
-        d.setUTCHours(0, 0, 0, 0);
-        d.setUTCMonth(d.getUTCMonth() - i);
-        const monthStr = d.toISOString().substring(0, 7);
-        const m = metricsMap[monthStr];
-        const gb = v => Math.round((v / 1024 ** 3) * 100) / 100;
-        history.push({
-          month: monthStr,
-          storage_avg_gb: m ? gb(m.storage_avg_bytes) : 0,
-          upload_gb:      m ? gb(m.upload_bytes)      : 0,
-          download_gb:    m ? gb(m.download_bytes)     : 0,
-          request_count:  m ? m.request_count          : 0,
-        });
-      }
-
+      const history = await getUsageHistory(request.user.id, 6);
       return reply.code(200).send({ history });
     } catch (error) {
       return reply.code(500).send({ error: 'history_query_failed', message: error.message });
@@ -166,23 +145,7 @@ export async function registerUsageRoutes(fastify) {
       const result = await BillingRecordModel.listByUser(request.user.id, limit, offset, status);
 
       return reply.code(200).send({
-        invoices: result.items.map(invoice => ({
-          id: invoice._id.toString(),
-          month: invoice.month.toISOString().substring(0, 7),
-          period_start: invoice.period_start.toISOString(),
-          period_end: invoice.period_end.toISOString(),
-          storage_charge_usd: invoice.storage_charge,
-          transfer_charge_usd: invoice.transfer_charge,
-          request_charge_usd: invoice.request_charge,
-          base_fee_usd: invoice.base_fee,
-          subtotal_usd: invoice.subtotal,
-          tax_usd: invoice.tax,
-          total_usd: invoice.total,
-          status: invoice.status,
-          due_date: invoice.due_date.toISOString(),
-          payment_received_at: invoice.payment_received_at?.toISOString() || null,
-          created_at: invoice.created_at.toISOString(),
-        })),
+        invoices: result.items.map(serializeInvoice),
         total: result.total,
         limit,
         offset,

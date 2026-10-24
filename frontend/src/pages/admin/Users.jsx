@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import AdminLayout from '../../components/AdminLayout';
 import { useAuth } from '../../hooks/useAuth';
-import { getUsers, updateUser } from '../../api/admin';
+import { getUsers } from '../../api/admin';
 import { I } from '../../components/Icons';
-
-const PLANS = ['free', 'starter', 'professional', 'enterprise', 'house'];
 
 const PLAN_COLOR = {
   free:         { color: 'var(--fg-2)',   bg: 'var(--bg-3)' },
@@ -14,111 +13,6 @@ const PLAN_COLOR = {
   house:        { color: 'var(--sage)',   bg: 'oklch(0.76 0.1 150 / .14)' },
 };
 
-const SUSPENSION_LABELS = {
-  null: 'Normal (based on billing)',
-  suspended: 'Force suspended',
-  exempt: 'Exempt from suspension',
-};
-
-function EditModal({ user, onSave, onCancel }) {
-  const [plan, setPlan] = useState(user.plan);
-  const [active, setActive] = useState(user.active);
-  const [isAdmin, setIsAdmin] = useState(user.is_admin || false);
-  const [suspensionOverride, setSuspensionOverride] = useState(user.suspension_override || null);
-  const [saving, setSaving] = useState(false);
-
-  async function handleSave() {
-    setSaving(true);
-    await onSave(user.id, { plan, active, is_admin: isAdmin, suspension_override: suspensionOverride });
-    setSaving(false);
-  }
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / .6)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <div style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '380px' }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: 600 }}>Edit User</h3>
-        <p style={{ margin: '0 0 20px', fontSize: '12px', color: 'var(--fg-2)' }}>{user.email}</p>
-
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '6px' }}>Plan</label>
-          <select
-            value={plan}
-            onChange={e => setPlan(e.target.value)}
-            style={{ width: '100%', padding: '9px 12px', background: 'var(--bg)', border: '1px solid var(--line-soft)', borderRadius: '8px', color: 'var(--fg)', fontFamily: 'inherit', fontSize: '13px' }}
-          >
-            {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-
-        <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            type="button"
-            onClick={() => setActive(v => !v)}
-            style={{
-              width: 36, height: 20, borderRadius: '10px', border: 'none', cursor: 'pointer',
-              background: active ? 'var(--sage)' : 'var(--bg-3)',
-              position: 'relative', transition: 'background 0.2s',
-            }}
-          >
-            <span style={{
-              position: 'absolute', top: 2, left: active ? 18 : 2, width: 16, height: 16,
-              borderRadius: '50%', background: 'white', transition: 'left 0.2s',
-            }} />
-          </button>
-          <span style={{ fontSize: '13px', color: 'var(--fg-1)' }}>{active ? 'Active' : 'Deactivated'}</span>
-        </div>
-
-        <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            type="button"
-            onClick={() => setIsAdmin(v => !v)}
-            style={{
-              width: 36, height: 20, borderRadius: '10px', border: 'none', cursor: 'pointer',
-              background: isAdmin ? 'var(--coral)' : 'var(--bg-3)',
-              position: 'relative', transition: 'background 0.2s',
-            }}
-          >
-            <span style={{
-              position: 'absolute', top: 2, left: isAdmin ? 18 : 2, width: 16, height: 16,
-              borderRadius: '50%', background: 'white', transition: 'left 0.2s',
-            }} />
-          </button>
-          <span style={{ fontSize: '13px', color: 'var(--fg-1)' }}>
-            {isAdmin ? 'Admin' : 'Not an admin'}
-          </span>
-        </div>
-
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '6px' }}>
-            Upload suspension
-          </label>
-          <select
-            value={suspensionOverride ?? 'null'}
-            onChange={e => setSuspensionOverride(e.target.value === 'null' ? null : e.target.value)}
-            style={{ width: '100%', padding: '9px 12px', background: 'var(--bg)', border: '1px solid var(--line-soft)', borderRadius: '8px', color: 'var(--fg)', fontFamily: 'inherit', fontSize: '13px' }}
-          >
-            <option value="null">{SUSPENSION_LABELS.null}</option>
-            <option value="suspended">{SUSPENSION_LABELS.suspended}</option>
-            <option value="exempt">{SUSPENSION_LABELS.exempt}</option>
-          </select>
-          <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--fg-3)' }}>
-            Normally, uploads are blocked automatically once an invoice has been overdue
-            past the grace period, and unblocked the moment it's paid. Override only to
-            force one or the other regardless of billing status.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button className="btn ghost" onClick={onCancel}>Cancel</button>
-          <button className="btn primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Users() {
   const { token } = useAuth();
   const [users, setUsers] = useState([]);
@@ -126,7 +20,6 @@ export default function Users() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [editing, setEditing] = useState(null);
 
   useEffect(() => { if (token) load(); }, [token]);
 
@@ -138,14 +31,6 @@ export default function Users() {
       setTotal(data.total || 0);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }
-
-  async function handleSave(id, changes) {
-    try {
-      await updateUser(token, id, changes);
-      setEditing(null);
-      await load();
-    } catch (e) { setError(e.message); }
   }
 
   const filtered = search
@@ -211,9 +96,9 @@ export default function Users() {
                 )}
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button onClick={() => setEditing(user)} className="btn ghost" style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}>
-                  Edit
-                </button>
+                <Link to={`/admin/users/${user.id}`} className="btn ghost" style={{ height: '28px', padding: '0 10px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}>
+                  View
+                </Link>
               </div>
             </div>
           );
@@ -223,8 +108,6 @@ export default function Users() {
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fg-2)' }}>No users found</div>
         )}
       </div>
-
-      {editing && <EditModal user={editing} onSave={handleSave} onCancel={() => setEditing(null)} />}
     </AdminLayout>
   );
 }
