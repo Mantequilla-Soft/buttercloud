@@ -154,6 +154,26 @@ async function seedQuotas() {
       supports_lifecycle_policies: true,
       api_support: true,
     },
+    {
+      // For accounts that shouldn't be billed — e.g. 3Speak's own account storing
+      // its own videos, since 3Speak pays for the infrastructure directly. Usage is
+      // still tracked and a real $0 invoice is still generated every month (an
+      // explicit record, not a silent skip) — see services/billing.js. Not tied to
+      // admin access in any way; is_admin is a fully separate concern (see User model).
+      plan: 'house',
+      storage_gb: 50000,           // 50 TB — adjust to the actual node capacity in use
+      monthly_transfer_gb: 500000, // 500 TB
+      monthly_requests: 100000000,
+      max_object_size_gb: 50,
+      max_buckets: 1,
+      base_monthly_usd: 0,
+      storage_overage_per_gb_usd: 0,
+      transfer_overage_per_gb_usd: 0,
+      request_overage_per_1m_usd: 0,
+      supports_replication: true,
+      supports_lifecycle_policies: true,
+      api_support: true,
+    },
   ];
 
   // Upsert — re-running setup-db always applies latest values

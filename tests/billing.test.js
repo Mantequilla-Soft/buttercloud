@@ -6,7 +6,7 @@ import { UserModel } from '../src/db/models/User.js';
 import { QuotaModel } from '../src/db/models/Quota.js';
 import { BucketModel } from '../src/db/models/Bucket.js';
 import { StorageNodeModel } from '../src/db/models/StorageNode.js';
-import { markOverdueAndNotify } from '../src/services/billing.js';
+import { markOverdueAndNotify, generateInvoiceForUser } from '../src/services/billing.js';
 import { checkAndSendQuotaWarnings } from '../src/services/quotaWarnings.js';
 import { getDB } from '../src/db/index.js';
 
@@ -242,5 +242,29 @@ describe('checkAndSendQuotaWarnings() — transfer', () => {
     await createUser('noquota@example.com', 'enterprise');
     // No quota for 'enterprise' in DB — should skip without throwing
     await expect(checkAndSendQuotaWarnings()).resolves.not.toThrow();
+  });
+});
+
+// ─── generateInvoiceForUser — 'house' plan ─────────────────────────────────────
+
+describe('generateInvoiceForUser() — unbilled accounts', () => {
+  it('generates a real $0 invoice for a house-plan account, not a skipped one', async () => {
+    const user = await createUser('house@example.com', 'house');
+    await createQuota('house', { storage_gb: 50000, monthly_transfer_gb: 500000 });
+    // Zero out every charge, unlike the shared helper's defaults
+    await QuotaModel.update('house', {
+      storage_gb: 50000,
+      monthly_transfer_gb: 500000,
+      base_monthly_usd: 0,
+      storage_overage_per_gb_usd: 0,
+      transfer_overage_per_gb_usd: 0,
+      request_overage_per_1m_usd: 0,
+    });
+
+    const { record, skipped } = await generateInvoiceForUser(user._id.toString(), '2025-01');
+
+    expect(skipped).toBe(false);
+    expect(record.total).toBe(0);
+    expect(record.base_fee).toBe(0);
   });
 });

@@ -1,6 +1,7 @@
 import { requireAdmin } from '../../middleware/adminAuth.js';
 import { UserModel } from '../../db/models/User.js';
 import { BucketModel } from '../../db/models/Bucket.js';
+import { QuotaModel } from '../../db/models/Quota.js';
 
 export async function registerAdminUserRoutes(fastify) {
   // GET /api/v1/admin/users
@@ -52,6 +53,14 @@ export async function registerAdminUserRoutes(fastify) {
       const { userId } = request.params;
       const { plan, active, company_name, is_admin } = request.body;
 
+      let newQuota = null;
+      if (plan !== undefined) {
+        newQuota = await QuotaModel.findByPlan(plan);
+        if (!newQuota) {
+          return reply.code(400).send({ error: 'invalid_plan', message: `No quota plan found for "${plan}"` });
+        }
+      }
+
       const updateData = {};
       if (plan !== undefined) updateData.plan = plan;
       if (active !== undefined) updateData.active = active;
@@ -64,6 +73,18 @@ export async function registerAdminUserRoutes(fastify) {
       }
 
       await UserModel.update(userId, updateData);
+
+      // quota_bytes is only ever set at bucket-creation time — without this, changing
+      // a user's plan silently leaves their existing bucket capped at whatever it
+      // started with, regardless of what the new plan promises.
+      if (newQuota) {
+        const bucket = await BucketModel.findByUserId(userId);
+        if (bucket) {
+          await BucketModel.update(bucket._id.toString(), {
+            quota_bytes: Math.floor(newQuota.limits.storage_gb * 1024 ** 3),
+          });
+        }
+      }
 
       return reply.code(200).send({
         id: existing._id.toString(),

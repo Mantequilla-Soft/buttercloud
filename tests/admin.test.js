@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { createServer } from '../src/server.js';
 import { UserModel } from '../src/db/models/User.js';
+import { BucketModel } from '../src/db/models/Bucket.js';
+import { QuotaModel } from '../src/db/models/Quota.js';
+import { StorageNodeModel } from '../src/db/models/StorageNode.js';
 import { createToken } from '../src/services/auth.js';
 import { getDB } from '../src/db/index.js';
 
@@ -107,8 +110,13 @@ describe('GET /api/v1/admin/users', () => {
 
 // ─── PATCH /api/v1/admin/users/:userId ───────────────────────────────────────
 
+async function seedPlan(plan, storageGb) {
+  await QuotaModel.create({ plan, storage_gb: storageGb, monthly_transfer_gb: storageGb * 10 });
+}
+
 describe('PATCH /api/v1/admin/users/:userId', () => {
   it('updates a user\'s plan', async () => {
+    await seedPlan('starter', 100);
     const { token } = await createAdminUser();
     const { id } = await createRegularUser();
 
@@ -123,6 +131,42 @@ describe('PATCH /api/v1/admin/users/:userId', () => {
     // Verify the change persisted in DB
     const updated = await UserModel.findById(id);
     expect(updated.plan).toBe('starter');
+  });
+
+  it('rejects a plan with no matching quota', async () => {
+    const { token } = await createAdminUser();
+    const { id } = await createRegularUser();
+
+    const res = await patch(
+      `/api/v1/admin/users/${id}`,
+      { plan: 'not-a-real-plan' },
+      { Authorization: `Bearer ${token}` },
+    );
+    expect(res.statusCode).toBe(400);
+
+    // Plan is unchanged
+    const unchanged = await UserModel.findById(id);
+    expect(unchanged.plan).toBe('free');
+  });
+
+  it('resizes the user\'s bucket quota to match the new plan', async () => {
+    await StorageNodeModel.create({ name: 'test-node', endpoint: 'http://minio.test:9000', capacity_total_bytes: 1024 ** 4 });
+    await seedPlan('free', 0.5); // signup provisions a bucket against whatever the free plan's quota is
+    await seedPlan('house', 50000); // 50TB, e.g. an unbilled internal account
+    const { token } = await createAdminUser();
+    const { id } = await createRegularUser();
+
+    const before = await BucketModel.findByUserId(id);
+    expect(before).toBeTruthy(); // signup auto-provisions a bucket
+
+    await patch(
+      `/api/v1/admin/users/${id}`,
+      { plan: 'house' },
+      { Authorization: `Bearer ${token}` },
+    );
+
+    const after = await BucketModel.findByUserId(id);
+    expect(after.quota_bytes).toBe(50000 * 1024 ** 3);
   });
 
   it('can deactivate a user', async () => {
@@ -142,7 +186,7 @@ describe('PATCH /api/v1/admin/users/:userId', () => {
     const { token } = await createAdminUser();
     const res = await patch(
       '/api/v1/admin/users/000000000000000000000000',
-      { plan: 'starter' },
+      { active: false },
       { Authorization: `Bearer ${token}` },
     );
     expect(res.statusCode).toBe(404);

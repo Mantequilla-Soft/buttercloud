@@ -4,13 +4,14 @@ import { useAuth } from '../../hooks/useAuth';
 import { getUsers, updateUser } from '../../api/admin';
 import { I } from '../../components/Icons';
 
-const PLANS = ['free', 'starter', 'professional', 'enterprise'];
+const PLANS = ['free', 'starter', 'professional', 'enterprise', 'house'];
 
 const PLAN_COLOR = {
   free:         { color: 'var(--fg-2)',   bg: 'var(--bg-3)' },
   starter:      { color: 'var(--sky)',    bg: 'oklch(0.78 0.085 230 / .14)' },
   professional: { color: 'var(--butter)', bg: 'oklch(0.85 0.135 90 / .14)' },
   enterprise:   { color: 'var(--plum)',   bg: 'oklch(0.74 0.115 320 / .14)' },
+  house:        { color: 'var(--sage)',   bg: 'oklch(0.76 0.1 150 / .14)' },
 };
 
 function EditModal({ user, onSave, onCancel }) {
