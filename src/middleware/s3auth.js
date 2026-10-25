@@ -223,7 +223,11 @@ function buildCanonicalHeaders(request, signedHeaders, host) {
     if (lowerName === 'host') continue; // Already added
     const value = request.headers[lowerName];
     if (value) {
-      headers[lowerName] = value.toLowerCase().trim();
+      // Only the header NAME is lowercased per the SigV4 spec — the value is
+      // preserved as-is (just whitespace-trimmed). Lowercasing the value here
+      // used to corrupt mixed-case values like x-amz-date ("20251025T...Z"),
+      // producing a canonical request that never matched any real client's.
+      headers[lowerName] = value.trim();
     }
   }
 
