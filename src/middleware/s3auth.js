@@ -239,14 +239,21 @@ function buildCanonicalHeaders(request, signedHeaders, host) {
 }
 
 /**
- * Canonicalize path (URI encoding)
+ * Canonicalize path for the CanonicalRequest.
+ *
+ * `path` here is request.url's path portion — i.e. exactly the percent-encoded
+ * bytes the client put on the wire, which is already what it signed. Every AWS
+ * service except S3 re-encodes that path for its own canonical request; S3 is
+ * the documented exception (AWS SigV4 spec, "Normalize URI paths" step): its
+ * canonical URI is the request path taken as-is, with no further encoding or
+ * normalization. Running it through encodeURIComponent here used to re-encode
+ * the '%' of any already-percent-encoded character (e.g. '%20' -> '%2520'),
+ * so any key needing percent-encoding (spaces, apostrophes, '+', ...) produced
+ * a canonical request the client never signed, failing with
+ * SignatureDoesNotMatch regardless of how correctly the client itself signed.
  */
 function canonicalizePath(path) {
-  return path
-    .split('/')
-    .map(segment => encodeURIComponent(segment))
-    .join('/')
-    .replace(/%2F/g, '/'); // Don't encode slashes
+  return path;
 }
 
 /**
