@@ -1,7 +1,14 @@
 import axios from 'axios';
+import aws4 from 'aws4';
 import { BucketModel } from '../db/models/Bucket.js';
 import { StorageNodeModel } from '../db/models/StorageNode.js';
 import { resolveNodeCredentials } from '../services/nodeCredentials.js';
+
+// Buckets are created on the storage node with this region (see
+// services/files.js's getMinioClient) — node.region is a separate,
+// Buttercloud-internal routing label ("default", etc.), not a SigV4 region,
+// and must never be used here.
+const STORAGE_NODE_SIGNING_REGION = 'us-east-1';
 
 /**
  * Proxy S3 request to the appropriate MinIO node
@@ -28,8 +35,17 @@ export async function proxyToMinIO(request, bucketName) {
   // Re-sign the request with this node's own admin credentials (falls back to the
   // global MinIO root credentials for nodes that don't have their own — see
   // services/nodeCredentials.js).
-  const minioUrl = `${node.endpoint}${request.url}`;
+  //
+  // The node is a plain S3-compatible backend (MinIO/Garage/Ceph) and only
+  // understands AWS SigV4 — it has no notion of Buttercloud's per-account API
+  // keys, so the client's own Authorization header is meaningless to it and
+  // must be replaced, not forwarded. This used to pass accessKey/secretKey as
+  // `auth: { username, password }`, which makes axios send HTTP Basic auth —
+  // not a SigV4 signature — hence every proxied request bouncing off the node
+  // with "the authorization mechanism you have provided is not supported."
   const { accessKey, secretKey } = resolveNodeCredentials(node);
+  const signed = signForNode(node, accessKey, secretKey, request.method, request.url, buildProxyHeaders(request));
+  const minioUrl = `${new URL(node.endpoint).origin}${signed.path}`;
 
   try {
     // Forward the request to MinIO. responseType: 'stream' is the key piece here —
@@ -48,12 +64,8 @@ export async function proxyToMinIO(request, bucketName) {
     const response = await axios({
       method: request.method,
       url: minioUrl,
-      headers: buildProxyHeaders(request),
+      headers: signed.headers,
       data: request.body,
-      auth: {
-        username: accessKey,
-        password: secretKey,
-      },
       validateStatus: () => true, // Don't throw on any status code
       maxRedirects: 0,
       timeout: 30000,
@@ -101,15 +113,40 @@ function buildProxyHeaders(request) {
   // Remove the original Authorization header
   delete headers.authorization;
 
-  // Keep x-amz-* headers (except x-amz-date and x-amz-security-token for re-signing)
-  // Actually, MinIO doesn't need these for now, but we could implement re-signing
-
   // content-length is left as-is from the original request: request.body is the same
   // bytes the client sent (now a raw stream for most content-types — see the
   // catch-all content-type parser in server.js), so its length hasn't changed. It
   // can't be recomputed from request.body itself once that's a stream.
 
   return headers;
+}
+
+/**
+ * Re-sign a request for a storage node with that node's own SigV4 credentials.
+ *
+ * The node is a plain S3-compatible backend — it only understands AWS SigV4, not
+ * Buttercloud's per-account API keys, so whatever Authorization header the caller
+ * had (if any) must be replaced here, not forwarded.
+ */
+function signForNode(node, accessKey, secretKey, method, pathWithQuery, headers = {}) {
+  const nodeOrigin = new URL(node.endpoint);
+
+  headers.host = nodeOrigin.host; // must match the node, not the gateway's public hostname — signature and wire request both depend on it
+  headers['x-amz-content-sha256'] = 'UNSIGNED-PAYLOAD'; // body may be streamed through unbuffered, so it can't be hashed
+  delete headers.authorization;
+  delete headers['x-amz-date']; // this signature gets its own fresh timestamp, independent of any caller-supplied one
+
+  return aws4.sign(
+    {
+      method,
+      host: nodeOrigin.host,
+      path: pathWithQuery,
+      service: 's3',
+      region: STORAGE_NODE_SIGNING_REGION,
+      headers,
+    },
+    { accessKeyId: accessKey, secretAccessKey: secretKey }
+  );
 }
 
 /**
@@ -124,10 +161,12 @@ export async function headObjectInMinIO(bucketName, objectKey) {
     if (!node) return 0;
 
     const { accessKey, secretKey } = resolveNodeCredentials(node);
+    const path = `/${bucketName}/${objectKey.split('/').map(encodeURIComponent).join('/')}`;
+    const signed = signForNode(node, accessKey, secretKey, 'HEAD', path);
     const response = await axios({
       method: 'HEAD',
-      url: `${node.endpoint}/${bucketName}/${objectKey}`,
-      auth: { username: accessKey, password: secretKey },
+      url: `${new URL(node.endpoint).origin}${signed.path}`,
+      headers: signed.headers,
       validateStatus: () => true,
       timeout: 10000,
     });
