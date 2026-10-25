@@ -6,7 +6,7 @@ Rent out storage from your own VPS servers to developers and apps that use AWS S
 
 ## What is Buttercloud?
 
-Buttercloud is a full-stack storage rental platform built on MinIO. It provides a transparent S3-compatible API gateway, a customer portal for file management, and an admin dashboard for managing users, nodes, and billing.
+Buttercloud is a full-stack storage rental platform with a backend-agnostic S3-compatible storage layer — MinIO is a common default, but any S3-compatible service (Garage, Ceph, R2, Backblaze, etc.) can sit behind it as a node, no code changes required (see [docs/storage-backends.md](docs/storage-backends.md)). It provides a transparent S3-compatible API gateway, a customer portal for file management, and an admin dashboard for managing users, nodes, and billing.
 
 Your customers point their existing AWS SDKs at your Buttercloud endpoint and get a fully S3-compatible experience — same API, same tools, just your infrastructure.
 
@@ -36,10 +36,14 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 
 **Admin Panel**
 - User management — list all users, change plans, activate/deactivate
-- Storage node management — add nodes, edit capacity, monitor health
+- Admin role (`is_admin`) — fully independent of billing plan, checked fresh on every request (so promoting/revoking takes effect immediately, no re-login needed)
+- Per-client dashboard — one page per customer with identity, usage trend, bucket/quota status, and billing history in a single consolidated view
+- Storage node management — add nodes, edit capacity, monitor health, per-node encrypted credentials (so a node running genuinely different software/an independent admin account doesn't have to share the default node's root credentials)
 - Bucket overview — see all customer buckets across all nodes
 - Bucket migration — move a customer's bucket between nodes with no client downtime
 - Billing management — generate invoices, send to customers, track payment status
+- Credits & comping — issue a standing credit (auto-applied to a customer's next invoice) or waive a specific invoice outright, both with a full audit trail
+- Upload suspension — accounts with an invoice overdue past the grace period are automatically blocked from new uploads (never from reading/deleting their own data), auto-lifted the moment it's paid, with an admin override in either direction
 
 **Billing & Payments**
 - Monthly invoice generation (manual or automatic on the 1st of each month)
@@ -52,8 +56,9 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 - Quota warning emails — customers notified by email when storage or transfer hits 80% of plan limit
 
 **Infrastructure**
-- Multi-node MinIO support — distribute buckets across VPS servers
+- Multi-node support — distribute buckets across servers, each node independently S3-compatible software (MinIO, Garage, etc.), each with its own credentials
 - Automatic node selection — new buckets go to the least-loaded node
+- Presigned URLs — `GET /{bucket}/{key}?presign` mints a short-lived URL so a CDN or client can fetch an object directly from the storage node, bypassing the gateway process for the actual transfer
 - Usage tracking — per-upload/download byte counters, async (non-blocking)
 - Node usage reconciliation — storage counters self-heal on startup and hourly
 - Quota enforcement — hard limits by plan at the upload level
@@ -67,12 +72,14 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 | Professional | 1 TB | 10 TB | 10 GB | $37.49/mo |
 | Enterprise | 10 TB | 100 TB | 50 GB | $124.99/mo |
 
+There's also a `house` plan — not publicly selectable, admin-assigned only (`PATCH /api/v1/admin/users/:id` with `{ "plan": "house" }`). It's for accounts that shouldn't be billed (e.g. your own infrastructure's own storage use) while still being fully usage-tracked: `base_monthly_usd` and every overage rate are `0`, so it generates a real, auditable $0 invoice every month rather than being silently excluded from billing.
+
 ## Stack
 
-- **Backend** — Node.js, Fastify, MongoDB, MinIO SDK
+- **Backend** — Node.js, Fastify, MongoDB, `minio` npm SDK (works against any S3-compatible backend, not just MinIO itself)
 - **Frontend** — React, Vite, React Router
 - **Auth** — JWT (HS256) for portal, AWS SigV4 for S3 gateway
-- **Storage** — MinIO (any number of independent nodes)
+- **Storage** — any S3-compatible backend (MinIO default; Garage, Ceph, R2, Backblaze, etc. also work), any number of independent nodes, each with its own credentials
 - **Email** — Nodemailer (any SMTP provider)
 - **Payments** — HIVE blockchain (self-polled, no third-party processor)
 
@@ -80,7 +87,7 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 
 - Node.js 20+
 - MongoDB 5.0+ (can be remote)
-- MinIO instance(s) — one per VPS
+- An S3-compatible storage instance per node (MinIO, Garage, etc. — see [docs/storage-backends.md](docs/storage-backends.md))
 
 ## Getting Started
 
@@ -110,6 +117,12 @@ MINIO_INTERNAL_ENDPOINT=http://your-minio-host:9000
 MINIO_ROOT_USER=your-minio-user
 MINIO_ROOT_PASSWORD=your-minio-password
 
+# Required only once you give a node its own credentials (Admin → Nodes → Add/Edit
+# Node) instead of sharing the MINIO_ROOT_USER/PASSWORD above — a 32-byte key, hex
+# encoded, used to encrypt those credentials at rest. Generate with:
+#   openssl rand -hex 32
+NODE_CREDENTIALS_KEY=
+
 # Optional: email delivery (Resend recommended — resend.com, 3,000 free/mo)
 SMTP_HOST=smtp.resend.com
 SMTP_PORT=465
@@ -119,11 +132,15 @@ SMTP_FROM=billing@yourdomain.com
 
 # Optional: HIVE crypto payment tracking
 HIVE_ACCOUNT=yourhiveaccount
+
+# Optional: days an invoice can sit overdue before uploads are blocked for that
+# account (default 30). See "Upload suspension" above.
+SUSPENSION_GRACE_DAYS=30
 ```
 
 ### 3. Initialize database
 
-Creates indexes and seeds the four plan tiers:
+Creates indexes and seeds the plan tiers (including the admin-only `house` plan):
 
 ```bash
 npm run setup-db
@@ -198,9 +215,9 @@ Browser / AWS SDK
   │  /api/v1/*    │  /{bucket}/...  │
   └────┬──────────┴────────┬────────┘
        │                   │
-  MongoDB            MinIO node(s)
-  (users, buckets,   (actual files,
-   quotas, billing)   one per VPS)
+  MongoDB            Storage node(s)
+  (users, buckets,   (actual files — any
+   quotas, billing)   S3-compatible backend)
 ```
 
 **Key design choices:**
@@ -253,6 +270,9 @@ HEAD   /{bucket}                Check bucket
 GET    /{bucket}?list-type=2    List objects
 PUT    /{bucket}/{key}          Upload object
 GET    /{bucket}/{key}          Download object
+GET    /{bucket}/{key}?presign  Mint a short-lived presigned URL instead of proxying
+                                 the object — lets a CDN/client fetch it directly from
+                                 the storage node
 DELETE /{bucket}/{key}          Delete object
 HEAD   /{bucket}/{key}          Object metadata
 POST   /{bucket}/{key}?uploads  Multipart upload
@@ -265,16 +285,19 @@ Public:
 ```
 POST   /api/v1/auth/signup              Create account
 POST   /api/v1/auth/login               Login
+POST   /api/v1/auth/logout              Logout (stateless — client discards the token)
 POST   /api/v1/auth/forgot-password     Request password reset email
 POST   /api/v1/auth/reset-password      Reset password via token
+GET    /api/v1/auth/verify-email        Verify email via emailed token
 GET    /api/v1/payment-config           Payment addresses and supported currencies
 ```
 
 Authenticated (`Authorization: Bearer <token>`):
 
 ```
-GET    /api/v1/me                       Current user profile
+GET    /api/v1/me                       Current user profile (includes is_admin)
 POST   /api/v1/auth/change-password     Change password (requires current password)
+POST   /api/v1/auth/resend-verification Resend the email verification link
 GET    /api/v1/credentials              List API keys
 POST   /api/v1/credentials              Create API key
 DELETE /api/v1/credentials/:id          Revoke API key
@@ -290,32 +313,44 @@ GET    /api/v1/quota                    Quota limits for current plan
 GET    /api/v1/billing                  Invoice history
 ```
 
-Admin routes (require `is_admin: true` on the requesting user):
+Admin routes (require `is_admin: true` on the requesting user, checked fresh against the database on every request — not cached in the JWT):
 
 ```
 GET    /api/v1/admin/users                List users
-PATCH  /api/v1/admin/users/:id            Update user plan/status
+GET    /api/v1/admin/users/:id            Consolidated per-client profile — identity,
+                                           bucket/quota, 6-month usage trend, billing
+                                           history, and credits in one read
+PATCH  /api/v1/admin/users/:id            Update plan, active, is_admin, or
+                                           suspension_override
+POST   /api/v1/admin/users/:id/credits    Issue a standing credit (auto-applied to
+                                           that user's next invoice)
 GET    /api/v1/admin/nodes                List storage nodes
-POST   /api/v1/admin/nodes                Add storage node
-PATCH  /api/v1/admin/nodes/:id            Update node
+POST   /api/v1/admin/nodes                Add storage node (optional access_key/
+                                           secret_key for a node with its own
+                                           credentials — see NODE_CREDENTIALS_KEY above)
+PATCH  /api/v1/admin/nodes/:id            Update node / rotate its credentials
 POST   /api/v1/admin/nodes/reconcile      Sync node usage from bucket totals
+GET    /api/v1/admin/node-health          Health/status summary for all nodes
 GET    /api/v1/admin/buckets              List all buckets
 POST   /api/v1/admin/buckets/:id/migrate  Migrate bucket to another node
 GET    /api/v1/admin/billing              List invoices (filter by status)
 POST   /api/v1/admin/billing/generate     Generate invoices for a month
 PATCH  /api/v1/admin/billing/:id          Update invoice status
+POST   /api/v1/admin/billing/:id/comp     Waive an invoice immediately — issues a
+                                           matching credit and marks it 'comped'
+                                           (distinct from 'paid')
 ```
 
 ## Adding More Storage
 
-When a node fills up, register a new MinIO server — new signups automatically land on the least-loaded node:
+When a node fills up, register a new S3-compatible server — new signups automatically land on the least-loaded node:
 
-1. Spin up a new VPS, install MinIO
-2. **Admin → Nodes → Add Node** — enter endpoint and capacity
+1. Spin up a new VPS, install an S3-compatible backend
+2. **Admin → Nodes → Add Node** — enter endpoint, capacity, and (if this node runs different software or a different admin account than your default node) its own access/secret key
 3. New users get buckets on the new node automatically
 4. **Admin → Buckets → Migrate** to move existing users with zero client downtime
 
-For larger single-node capacity, MinIO also supports [distributed mode](https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-multi-node-multi-drive.html) where multiple servers form one cluster — register the cluster as a single node in Buttercloud.
+**On the backend choice:** as of late 2025–2026, MinIO discontinued free distribution of its community edition entirely — no more pre-compiled binaries, and the Docker images were pulled from both Docker Hub and Quay.io. An existing MinIO deployment pulled before that keeps working fine, but don't plan on `docker pull`-ing MinIO fresh for a new node. [Garage](https://garagehq.deuxfleurs.fr/) (Rust, actively maintained, genuinely open-source, Docker images still freely available) is a solid default for new nodes — see [docs/storage-backends.md](docs/storage-backends.md) for the full comparison and setup notes.
 
 ## Production Deployment
 
@@ -337,10 +372,11 @@ server {
 Checklist before going live:
 
 - [ ] Strong, unique `JWT_SECRET` (32+ random characters)
-- [ ] Strong MinIO and MongoDB passwords
+- [ ] Strong, unique `NODE_CREDENTIALS_KEY` if any node has its own credentials (`openssl rand -hex 32`)
+- [ ] Strong storage-backend and MongoDB passwords — never reuse the same credentials across nodes
 - [ ] HTTPS on all public endpoints
 - [ ] MongoDB backups configured
-- [ ] Firewall: only port 443 public, MinIO port internal-only
+- [ ] Firewall: only port 443 public on the app server; each storage node's S3 port restricted to the specific app server IP(s) that need it (private networking between them if your provider supports it, rather than individual public-IP firewall rules per app server)
 - [ ] `NODE_ENV=production` in `.env`
 - [ ] SMTP configured and test email verified
 - [ ] `HIVE_ACCOUNT` set and receiving test transfers

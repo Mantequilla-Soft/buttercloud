@@ -1,6 +1,6 @@
 # Storage Backends — MinIO is Just One Option
 
-Buttercloud's S3 gateway is backend-agnostic. The storage layer is a thin adapter: any service that speaks the S3 API can sit underneath it. MinIO is the default because it's free, self-hosted, and runs on any VPS — but it is not special. Swapping it out is a config change, not a code change.
+Buttercloud's S3 gateway is backend-agnostic. The storage layer is a thin adapter: any service that speaks the S3 API can sit underneath it. MinIO has historically been the default — self-hosted, runs on any VPS — but it is not special, and it's no longer the easiest free option for a brand-new node (see the note further down). Swapping backends, or mixing several, is a config change, not a code change.
 
 ---
 
@@ -74,10 +74,10 @@ No code changes needed for a new node — each one carries its own credentials (
 
 | Backend | Notes |
 |---|---|
-| **MinIO** | Default. Runs on any Linux VPS. Single-node or distributed cluster. |
+| **Garage** | Rust-based, designed for geo-distributed self-hosting. Very lightweight. Recommended default for new nodes — see the note below on MinIO's distribution changes. |
+| **MinIO** | Fine for a node that's already running one. Free binary/Docker distribution discontinued as of late 2025–2026 — see below before planning a new node around it. |
 | **Ceph (RadosGW)** | Enterprise-grade, multi-node, erasure coding. Heavier to operate. |
 | **SeaweedFS** | Lighter than Ceph, good for medium-scale clusters. |
-| **Garage** | Rust-based, designed for geo-distributed self-hosting. Very lightweight. |
 | **Zenko CloudServer** | Open-source S3 server by Scality. |
 
 ### Managed (pay-per-use, no infra)
@@ -118,12 +118,15 @@ When a user creates an API key in Buttercloud, the key is stored in MongoDB and 
 
 ---
 
-## Why MinIO is still a good default
+## A note on MinIO specifically (as of late 2025–2026)
 
-- Runs on a $5/mo VPS with 1 GB RAM
-- No egress fees (you own the server)
-- No per-request charges
-- Supports TLS, bucket versioning, lifecycle policies, and distributed mode for larger deployments
-- Easy to upgrade to a distributed cluster as you grow (register the cluster as a single Buttercloud node)
+MinIO is no longer a straightforward default for a **new** node. The company discontinued free distribution of the community edition: pre-compiled binary releases stopped around October 2025, and the `minio/minio`/`minio/mc` images were pulled from both Docker Hub and Quay.io around September 2026 (Quay had been the common workaround until it too started requiring auth). None of this was ever confirmed via an official MinIO announcement we could find — multiple independent reports converge on the same timeline, which is enough to treat it as real, but exact dates aren't guaranteed.
 
-For a bootstrapped storage platform, starting on MinIO and migrating high-value customers to R2 or Backblaze as you scale is a perfectly viable strategy — Buttercloud's migration tooling makes it operationally straightforward.
+Practical upshot:
+- **An existing MinIO deployment** (image already pulled, binary already installed) keeps working fine — nothing about this breaks what's already running.
+- **A brand new MinIO node is no longer a quick `docker pull` away.** If you hit `unauthorized: access to the requested resource is not authorized` pulling `minio/minio` or `quay.io/minio/minio`, that's this, not a mistake on your end.
+- One source also flagged a CVE (reportedly CVSS 8.8, an auth bypass) against the last freely-distributed community release — verify independently against NVD before treating that as confirmed, but it's a reason not to go hunting for a cached copy of an old image as a workaround.
+
+**[Garage](https://garagehq.deuxfleurs.fr/)** is a solid default for new nodes instead: Rust, built specifically for self-hosted/geo-distributed object storage, actively maintained, genuinely open-source, Docker images still freely available as of this writing. It's what we've actually run this through end-to-end — registering a Garage node as a second Buttercloud storage backend, alongside an existing MinIO one, with its own independent credentials.
+
+For a bootstrapped storage platform, starting on a free self-hosted backend (Garage, or an existing MinIO deployment) and migrating high-value customers to R2 or Backblaze as you scale is still a perfectly viable strategy — Buttercloud's migration tooling makes it operationally straightforward regardless of which backend is on either end.
