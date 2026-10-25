@@ -1,0 +1,27 @@
+# Buttercloud
+
+> Self-hosted, backend-agnostic S3-compatible object storage platform with multi-tenant billing (Node.js/Fastify + MongoDB). Any S3-compatible service (MinIO, Garage, Ceph, R2, etc.) can sit behind it as a storage node — the gateway is a transparent SigV4 proxy, not backend-specific code.
+
+Buttercloud issues its own S3-style API credentials (access key / secret key) per account — these are **not** credentials for the underlying storage backend, they're validated by Buttercloud's own SigV4 middleware against MongoDB. One bucket per account, auto-provisioned at signup. Production instance: `https://s3.3speak.tv`.
+
+## Integration basics
+
+- **S3 Gateway**: full AWS SigV4-compatible endpoint. Standard operations — PUT/GET/DELETE/HEAD object, list-objects, create/delete bucket, multipart upload. Works with any S3 SDK (boto3, aws-sdk-js, aws-cli, rclone) by pointing it at the Buttercloud endpoint with Buttercloud-issued credentials.
+- **Presigned URLs**: `GET /{bucket}/{key}?presign[&expires=<seconds>]` returns a short-lived URL for downloading an object directly from the storage node, bypassing the gateway process for the transfer. **Presigned PUT (upload) does not exist yet** — tracked as [issue #14](https://github.com/Mantequilla-Soft/buttercloud/issues/14), not built as of this writing. Uploads currently go through the gateway's normal PUT.
+- **Per-node credentials**: each storage node can hold its own encrypted access/secret key, independent of other nodes (set via Admin → Nodes). Requires `NODE_CREDENTIALS_KEY` in `.env`.
+- **Quota & suspension — real 403s to handle, not generic failures**: uploads can fail with `Code: 'QuotaExceeded'` (plan storage limit hit) or `Code: 'AccountSuspended'` (invoice overdue past the grace period). A service/automation account that should never hit either belongs on the `house` billing plan — unbilled, admin-assigned, exempt from suspension, with quota sized to the node it actually uses.
+- **Portal/admin API**: separate JWT auth (`Authorization: Bearer <token>`, 7-day expiry) for account/billing/admin management — distinct from the SigV4 data-plane API. Not typically what an automated integration uses; the SigV4 API is.
+
+## Primary docs
+
+- [README](https://github.com/Mantequilla-Soft/buttercloud/blob/main/README.md): full feature list, complete API route reference, setup instructions, architecture diagram
+- [Storage backends](https://github.com/Mantequilla-Soft/buttercloud/blob/main/docs/storage-backends.md): how the backend-agnostic storage layer works, swapping/mixing nodes, current state of MinIO vs. Garage distribution as of late 2025–2026
+- [Nginx/SSL setup](https://github.com/Mantequilla-Soft/buttercloud/blob/main/docs/nginx-ssl-setup.md): production reverse-proxy configuration
+
+## Context for the IPFS hot-node integration specifically
+
+3Speak's storage redesign moves video off an unbounded IPFS "supernode" and onto Buttercloud-backed S3-compatible storage, with a separate IPFS "hot node" kept as a time-bounded cache for recently-published content. The open design question — what promotes an archived (Buttercloud-only) video back into the hot node if it goes viral later — is scoped but not built: see [issue #4](https://github.com/Mantequilla-Soft/buttercloud/issues/4) for the current thinking (a separate worker service, not part of Buttercloud itself, triggered by view-velocity, pulling the canonical files back out via Buttercloud's presigned-GET or the direct S3 API).
+
+## Repository
+
+- [Mantequilla-Soft/buttercloud](https://github.com/Mantequilla-Soft/buttercloud) — source, issue tracker
