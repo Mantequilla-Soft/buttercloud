@@ -1,3 +1,4 @@
+import { PassThrough } from 'node:stream';
 import { BucketModel } from '../db/models/Bucket.js';
 import { UserModel } from '../db/models/User.js';
 import { UsageMetricModel } from '../db/models/UsageMetric.js';
@@ -85,16 +86,56 @@ export async function registerFileRoutes(fastify) {
         }
         if (part.type !== 'file') continue;
 
+        // Re-fetch so usage from a prior file in this same multi-file request counts
+        // toward this check too — the `bucket` fetched at the top of the handler goes
+        // stale after the first file.
+        const currentBucket = await BucketModel.findById(bucket._id.toString());
+        const available = currentBucket.quota_bytes - currentBucket.current_usage_bytes;
+        if (available <= 0) {
+          part.file.resume(); // drain so the multipart parser isn't left hanging
+          const quotaErr = new Error('Storage quota exceeded');
+          quotaErr.statusCode = 403;
+          quotaErr.code = 'QuotaExceeded';
+          throw quotaErr;
+        }
+
         const { filename, mimetype } = part;
-        const buffer = await part.toBuffer();
         const key = prefix ? prefix + filename : filename;
 
-        await uploadFile(bucket.bucket_name, key, buffer, mimetype);
-        await BucketModel.incrementUsage(bucket._id.toString(), buffer.length);
+        // Stream straight through to the storage backend instead of buffering the
+        // whole file in this process first — the same OOM risk #1 fixed for the S3
+        // gateway applied here too, just via @fastify/multipart's part.toBuffer()
+        // instead of axios. The PassThrough also doubles as a running byte counter,
+        // both for usage tracking (the stream's final size isn't known upfront) and
+        // to abort mid-upload if it would blow past the remaining quota — a single
+        // large file easily could, unlike the old pre-sized S3 gateway PUT path.
+        let bytesSeen = 0;
+        let quotaExceededMidUpload = false;
+        const counted = new PassThrough();
+        part.file.on('data', chunk => {
+          bytesSeen += chunk.length;
+          if (!quotaExceededMidUpload && bytesSeen > available) {
+            quotaExceededMidUpload = true;
+            counted.destroy(new Error('quota exceeded mid-upload'));
+          }
+        });
+        part.file.pipe(counted);
 
-        trackUsageAsync(() => UsageMetricModel.incrementUpload(user.id, new Date(), buffer.length));
+        try {
+          await uploadFile(bucket.bucket_name, key, counted, mimetype);
+        } catch (err) {
+          if (quotaExceededMidUpload) {
+            const quotaErr = new Error('Storage quota exceeded');
+            quotaErr.statusCode = 403;
+            quotaErr.code = 'QuotaExceeded';
+            throw quotaErr;
+          }
+          throw err;
+        }
 
-        uploads.push({ filename: key, size: buffer.length });
+        await BucketModel.incrementUsage(bucket._id.toString(), bytesSeen);
+        trackUsageAsync(() => UsageMetricModel.incrementUpload(user.id, new Date(), bytesSeen));
+        uploads.push({ filename: key, size: bytesSeen });
       }
 
       return reply.code(200).send({ uploaded: uploads });

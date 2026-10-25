@@ -100,14 +100,19 @@ export async function downloadFile(bucketName, key) {
   };
 }
 
-export async function uploadFile(bucketName, key, buffer, contentType) {
+// `data` is a Buffer or a Readable stream — the minio SDK handles either, and for
+// a stream with no known size (the dashboard's multipart upload path) it transparently
+// does a chunked multipart upload instead of requiring the whole thing in memory first.
+export async function uploadFile(bucketName, key, data, contentType) {
   const { client } = await getBucketAndNode(bucketName);
 
-  await client.putObject(bucketName, key, buffer, buffer.length, {
+  await client.putObject(bucketName, key, data, {
     'Content-Type': contentType || 'application/octet-stream',
   });
 
-  return { key, size: buffer.length };
+  // Only meaningful when `data` is a Buffer — a stream's size isn't known here;
+  // callers streaming a file track the actual byte count themselves as it flows.
+  return { key, size: Buffer.isBuffer(data) ? data.length : undefined };
 }
 
 export async function statFile(bucketName, key) {
