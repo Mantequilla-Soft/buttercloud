@@ -203,6 +203,7 @@ export default function Files() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null); // { current, total, fileName, percent }
   const [prefix, setPrefix] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [noBucket, setNoBucket] = useState(false);
@@ -240,14 +241,19 @@ export default function Files() {
     setUploading(true);
     setError('');
     try {
-      for (const file of picked) {
-        await uploadFile(token, file, prefix);
+      for (let i = 0; i < picked.length; i++) {
+        const file = picked[i];
+        setUploadProgress({ current: i + 1, total: picked.length, fileName: file.name, percent: 0 });
+        await uploadFile(token, file, prefix, percent => {
+          setUploadProgress(p => (p ? { ...p, percent } : p));
+        });
       }
       await loadFiles();
     } catch (err) {
       setError(err.message);
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -350,6 +356,21 @@ export default function Files() {
         {error && (
           <div style={{ padding: '10px 14px', marginBottom: '16px', background: 'oklch(0.72 0.145 25 / .15)', border: '1px solid oklch(0.72 0.145 25 / .4)', borderRadius: '8px', color: 'var(--coral)', fontSize: '13px' }}>
             {error}
+          </div>
+        )}
+
+        {uploadProgress && (
+          <div style={{ padding: '12px 16px', marginBottom: '16px', background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '12px' }}>
+              <span style={{ color: 'var(--fg-1)' }}>
+                Uploading {uploadProgress.fileName}
+                {uploadProgress.total > 1 && ` (${uploadProgress.current} of ${uploadProgress.total})`}
+              </span>
+              <span className="mono" style={{ color: 'var(--fg-2)' }}>{uploadProgress.percent}%</span>
+            </div>
+            <div style={{ height: '6px', borderRadius: '999px', background: 'var(--bg-3)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${uploadProgress.percent}%`, background: 'var(--butter)', borderRadius: '999px', transition: 'width 0.15s ease' }} />
+            </div>
           </div>
         )}
 

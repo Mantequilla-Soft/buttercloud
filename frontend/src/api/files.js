@@ -17,23 +17,38 @@ export async function listFiles(token, prefix = '') {
   return data; // { files: [...], folders: [...] }
 }
 
-export async function uploadFile(token, file, prefix = '') {
-  const formData = new FormData();
-  if (prefix) formData.append('prefix', prefix);
-  formData.append('file', file);
+// XMLHttpRequest, not fetch — fetch has no upload progress event in any browser
+// that matters here; xhr.upload.onprogress is the only reliable way to get it.
+export function uploadFile(token, file, prefix = '', onProgress) {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    if (prefix) formData.append('prefix', prefix);
+    formData.append('file', file);
 
-  const response = await fetch('/api/v1/files/upload', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/v1/files/upload');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch { /* non-JSON error body */ }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data);
+      } else {
+        reject(new Error(data.message || 'Upload failed'));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Upload failed (network error)'));
+
+    xhr.send(formData);
   });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.message || 'Upload failed');
-  }
-
-  return response.json();
 }
 
 export async function downloadFile(token, key) {
