@@ -133,6 +133,15 @@ function signForNode(node, accessKey, secretKey, method, pathWithQuery, headers 
 
   headers.host = nodeOrigin.host; // must match the node, not the gateway's public hostname — signature and wire request both depend on it
   headers['x-amz-content-sha256'] = 'UNSIGNED-PAYLOAD'; // body may be streamed through unbuffered, so it can't be hashed
+  // Axios defaults to advertising gzip support and transparently decompresses any
+  // compressed reply — but it leaves the original (compressed, smaller) Content-Length
+  // header untouched, which we then forward verbatim alongside the now-larger
+  // decompressed body. The node honors that stale, too-small Content-Length and cuts
+  // the response off to match it: a real but silent truncation (observed starting
+  // around the size where the node starts bothering to compress at all), not a network
+  // issue. Forcing identity here means the node never compresses what we're about to
+  // re-stream byte-for-byte anyway, so its Content-Length always matches its body.
+  headers['accept-encoding'] = 'identity';
   delete headers.authorization;
   delete headers['x-amz-date']; // this signature gets its own fresh timestamp, independent of any caller-supplied one
 
