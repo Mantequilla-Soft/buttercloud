@@ -138,17 +138,26 @@ export default function Keys() {
           )}
 
           {keys.map(k => (
-            <div key={k.id} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 80px', gap: '10px', padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', alignItems: 'center' }}>
+            <div key={k.id} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 80px', gap: '10px', padding: '12px 16px', borderBottom: '1px solid var(--line-soft)', alignItems: 'center', opacity: k.active ? 1 : 0.5 }}>
               <div>
-                <div style={{ fontWeight: 500, fontSize: '13px', color: 'var(--fg)', marginBottom: '3px' }}>{k.name}</div>
+                <div style={{ fontWeight: 500, fontSize: '13px', color: 'var(--fg)', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {k.name}
+                  {!k.active && (
+                    <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--fg-2)', border: '1px solid var(--line-soft)', borderRadius: '4px', padding: '1px 6px' }}>
+                      Revoked
+                    </span>
+                  )}
+                </div>
                 <div className="mono" style={{ fontSize: '11.5px', color: 'var(--fg-2)' }}>{k.access_key}</div>
               </div>
               <div style={{ fontSize: '12px', color: 'var(--fg-2)' }}>{new Date(k.created_at).toLocaleDateString()}</div>
               <div style={{ fontSize: '12px', color: 'var(--fg-2)' }}>{k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}</div>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button onClick={() => handleRevoke(k.id)} className="btn danger" style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}>
-                  Revoke
-                </button>
+                {k.active && (
+                  <button onClick={() => handleRevoke(k.id)} className="btn danger" style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}>
+                    Revoke
+                  </button>
+                )}
               </div>
             </div>
           ))}
