@@ -43,7 +43,7 @@ function AddNodeModal({ onSave, onCancel }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
           {[
             { label: 'Node Name', key: 'name', placeholder: 'vps-us-east-1' },
-            { label: 'MinIO Endpoint', key: 'endpoint', placeholder: 'http://147.135.x.x:9000' },
+            { label: 'Storage Endpoint', key: 'endpoint', placeholder: 'http://147.135.x.x:9000 (S3-compatible — MinIO, Garage, etc.)' },
             { label: 'Capacity (GB)', key: 'capacity_total_gb', placeholder: '500', type: 'number' },
             { label: 'Region', key: 'region', placeholder: 'default' },
           ].map(({ label, key, placeholder, type }) => (
@@ -55,17 +55,17 @@ function AddNodeModal({ onSave, onCancel }) {
 
           <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: '14px' }}>
             <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '5px' }}>Access Key (optional)</label>
-            <input type="text" style={inputStyle} placeholder="Leave blank to share the global MinIO credentials" value={form.access_key} onChange={set('access_key')} autoComplete="off" />
+            <input type="text" style={inputStyle} placeholder="Leave blank to share the default node's credentials" value={form.access_key} onChange={set('access_key')} autoComplete="off" />
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '5px' }}>Secret Key (optional)</label>
             <input type="password" style={inputStyle} placeholder="Required only if Access Key is set" value={form.secret_key} onChange={set('secret_key')} autoComplete="new-password" />
           </div>
           <p style={{ margin: 0, fontSize: '11px', color: 'var(--fg-3)', lineHeight: 1.5 }}>
-            Leave both blank if this is the same MinIO deployment as your other nodes — it'll
-            use the global <span className="mono">MINIO_ROOT_USER</span>/<span className="mono">MINIO_ROOT_PASSWORD</span>.
-            Fill them in for a genuinely separate backend (different software, different admin
-            account). Stored encrypted — never shown again after this.
+            Leave both blank if this node shares admin credentials with your default storage
+            backend. Fill them in for a genuinely separate backend — different software
+            entirely (MinIO, Garage, Ceph, anything S3-compatible) or just a different admin
+            account. Stored encrypted — never shown again after this.
           </p>
         </div>
 
@@ -122,7 +122,7 @@ function EditNodeModal({ node, onSave, onCancel }) {
             <input style={inputStyle} value={form.name} onChange={set('name')} required />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '5px' }}>MinIO Endpoint</label>
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--fg-2)', marginBottom: '5px' }}>Storage Endpoint</label>
             <input style={inputStyle} value={form.endpoint} onChange={set('endpoint')} required />
           </div>
           <div>
@@ -243,7 +243,7 @@ export default function Nodes() {
           <div style={{ padding: '48px', textAlign: 'center', color: 'var(--fg-2)', background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)' }}>
             <div style={{ marginBottom: '8px' }}>{I.bucket({ size: 28 })}</div>
             <div style={{ fontWeight: 500, color: 'var(--fg-1)', marginBottom: '4px' }}>No storage nodes</div>
-            <div style={{ fontSize: '12px' }}>Add a MinIO node to start accepting uploads</div>
+            <div style={{ fontSize: '12px' }}>Add a storage node to start accepting uploads</div>
           </div>
         )}
 

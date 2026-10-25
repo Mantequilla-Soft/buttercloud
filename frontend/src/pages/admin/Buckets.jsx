@@ -47,7 +47,7 @@ function MigrateModal({ bucket, nodes, onConfirm, onCancel }) {
             <div style={{ padding: '14px 16px', background: 'oklch(0.85 0.135 90 / .08)', border: '1px solid oklch(0.85 0.135 90 / .2)', borderRadius: '8px', fontSize: '13px', color: 'var(--fg-1)', lineHeight: 1.6 }}>
               <div style={{ fontWeight: 500, marginBottom: '4px' }}>No destination available</div>
               <div style={{ fontSize: '12px', color: 'var(--fg-2)' }}>
-                You only have one storage node. Go to <strong>Admin → Nodes → Add Node</strong> to register a second MinIO instance, then come back here to migrate.
+                You only have one storage node. Go to <strong>Admin → Nodes → Add Node</strong> to register a second node, then come back here to migrate.
               </div>
             </div>
           ) : (
