@@ -25,4 +25,5 @@ export const generateInvoices  = (token, month)   => req(token, '/api/v1/admin/b
 export const updateInvoice     = (token, id, status) => req(token, `/api/v1/admin/billing/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
 export const getHealth   = (token)             => req(token, '/api/v1/admin/node-health');
 export const getBuckets  = (token)             => req(token, '/api/v1/admin/buckets');
+export const updateBucket  = (token, id, body) => req(token, `/api/v1/admin/buckets/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 export const migrateBucket = (token, id, body) => req(token, `/api/v1/admin/buckets/${id}/migrate`, { method: 'POST', body: JSON.stringify(body) });

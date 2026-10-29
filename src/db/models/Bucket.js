@@ -10,6 +10,8 @@ export class BucketModel {
       node_id: new ObjectId(data.node_id),
       quota_bytes: data.quota_bytes,
       current_usage_bytes: 0,
+      // Unsigned GET/HEAD on objects allowed (admin-only, see gateway/publicRead.js)
+      public_read: false,
       created_at: new Date(),
       updated_at: new Date(),
       metadata: {

@@ -3,6 +3,7 @@ import { BucketModel } from '../../db/models/Bucket.js';
 import { UserModel } from '../../db/models/User.js';
 import { StorageNodeModel } from '../../db/models/StorageNode.js';
 import { migrateBucket, cleanupSourceBucket } from '../../services/migration.js';
+import { RESERVED_PUBLIC_NAMES } from '../../gateway/publicRead.js';
 
 export async function registerAdminBucketRoutes(fastify) {
   // GET /api/v1/admin/buckets — list all buckets with owner + node info
@@ -36,11 +37,44 @@ export async function registerAdminBucketRoutes(fastify) {
           node_endpoint: node?.endpoint || '',
           quota_gb: Math.round((b.quota_bytes / (1024 ** 3)) * 100) / 100,
           used_gb: Math.round((b.current_usage_bytes / (1024 ** 3)) * 100) / 100,
+          public_read: b.public_read === true,
           created_at: b.created_at,
         };
       }));
 
       return reply.code(200).send({ buckets: enriched, total: enriched.length });
+    } catch (error) {
+      return reply.code(500).send({ error: 'internal_error', message: error.message });
+    }
+  });
+
+  // PATCH /api/v1/admin/buckets/:bucketId — set public_read (unsigned GET/HEAD on objects)
+  fastify.patch('/api/v1/admin/buckets/:bucketId', async (request, reply) => {
+    try {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const { public_read } = request.body || {};
+      if (typeof public_read !== 'boolean') {
+        return reply.code(400).send({ error: 'invalid_request', message: 'public_read must be true or false' });
+      }
+
+      const bucket = await BucketModel.findById(request.params.bucketId);
+      if (!bucket) return reply.code(404).send({ error: 'not_found', message: 'Bucket not found' });
+
+      // A public bucket named like a dashboard page would take over that URL
+      if (public_read && RESERVED_PUBLIC_NAMES.has(bucket.bucket_name)) {
+        return reply.code(409).send({
+          error: 'reserved_name',
+          message: `"${bucket.bucket_name}" is also a dashboard path, so it can't be made public`,
+        });
+      }
+
+      const updated = await BucketModel.update(bucket._id.toString(), { public_read });
+      return reply.code(200).send({
+        id: updated._id.toString(),
+        bucket_name: updated.bucket_name,
+        public_read: updated.public_read === true,
+      });
     } catch (error) {
       return reply.code(500).send({ error: 'internal_error', message: error.message });
     }

@@ -7,6 +7,7 @@ import { isUploadSuspended } from '../services/suspension.js';
 import { BucketModel } from '../db/models/Bucket.js';
 import { StorageNodeModel } from '../db/models/StorageNode.js';
 import { UserModel } from '../db/models/User.js';
+import { findPublicBucket, handlePublicRead } from './publicRead.js';
 
 /**
  * Register S3 gateway routes
@@ -40,8 +41,18 @@ export async function registerS3Gateway(fastify) {
     method: ['PUT', 'GET', 'DELETE', 'HEAD', 'POST'],
     url: '/*',
     async handler(request, reply) {
-      // Browser navigation (no AWS auth) — serve the SPA or reject non-GET
+      // No AWS auth: an object in a public_read bucket (#22), or browser
+      // navigation — serve the SPA or reject non-GET
       if (!request.s3auth) {
+        const pathParts = request.params['*'].split('/').filter(Boolean);
+        try {
+          const publicBucket = await findPublicBucket(pathParts[0]);
+          if (publicBucket) {
+            return await handlePublicRead(request, reply, publicBucket, pathParts.slice(1).join('/') || null);
+          }
+        } catch (error) {
+          return handleS3Error(reply, error);
+        }
         if (request.method === 'GET' || request.method === 'HEAD') {
           return reply.sendFile('index.html');
         }

@@ -59,6 +59,7 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 - Multi-node support — distribute buckets across servers, each node independently S3-compatible software (MinIO, Garage, etc.), each with its own credentials
 - Automatic node selection — new buckets go to the least-loaded node
 - Presigned URLs — `GET /{bucket}/{key}?presign` mints a short-lived URL so a CDN or client can fetch an object directly from the storage node, bypassing the gateway process for the actual transfer
+- Public-read buckets — an admin can mark a bucket `public_read`, so its objects can be fetched with an unsigned GET/HEAD (with `Range` support). That's how HLS video is served to a CDN pull zone or a player. Listing, uploads and deletes still need SigV4
 - Usage tracking — per-upload/download byte counters, async (non-blocking)
 - Node usage reconciliation — storage counters self-heal on startup and hourly
 - Quota enforcement — hard limits by plan at the upload level
@@ -277,6 +278,8 @@ DELETE /{bucket}/{key}          Delete object
 HEAD   /{bucket}/{key}          Object metadata
 POST   /{bucket}/{key}?uploads  Multipart upload
 ```
+
+On a bucket an admin has marked `public_read` (Admin → Buckets), `GET` and `HEAD` on `/{bucket}/{key}` also work with no signature. The query string is ignored, and only `Range` and the conditional headers (`If-Match`, `If-None-Match`, `If-Modified-Since`, `If-Unmodified-Since`, `If-Range`) are passed to the storage node. Everything else on that bucket still needs SigV4. A bucket named like a dashboard page (`files`, `admin`, `login`, …) can't be made public.
 
 ## Portal API Reference
 

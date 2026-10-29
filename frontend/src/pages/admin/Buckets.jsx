@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AdminLayout from '../../components/AdminLayout';
 import { useAuth } from '../../hooks/useAuth';
-import { getBuckets, getNodes, migrateBucket } from '../../api/admin';
+import { getBuckets, getNodes, migrateBucket, updateBucket } from '../../api/admin';
 import { I } from '../../components/Icons';
 
 function MigrateModal({ bucket, nodes, onConfirm, onCancel }) {
@@ -152,6 +152,19 @@ export default function Buckets() {
     await load();
   }
 
+  async function togglePublic(b) {
+    const next = !b.public_read;
+    const message = next
+      ? `Make ${b.bucket_name} public? Anyone with an object's URL can then download it without a key. Listing, uploads and deletes still need a key.`
+      : `Make ${b.bucket_name} private? Unsigned requests for its objects will stop working, including any CDN pulling from it.`;
+    if (!window.confirm(message)) return;
+    setError('');
+    try {
+      await updateBucket(token, b.id, { public_read: next });
+      setBuckets(bs => bs.map(x => (x.id === b.id ? { ...x, public_read: next } : x)));
+    } catch (e) { setError(e.message); }
+  }
+
   const filtered = search
     ? buckets.filter(b => b.bucket_name.includes(search) || b.user_email.includes(search) || b.node_name.includes(search))
     : buckets;
@@ -177,8 +190,8 @@ export default function Buckets() {
       {lastResult && <ResultBanner result={lastResult} onClose={() => setLastResult(null)} />}
 
       <div className="files">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px 100px 90px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
-          <span>Bucket / Owner</span><span>Node</span><span>Usage</span><span>Plan</span><span></span>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px 100px 80px 90px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
+          <span>Bucket / Owner</span><span>Node</span><span>Usage</span><span>Plan</span><span>Access</span><span></span>
         </div>
 
         {loading && <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fg-2)' }}>Loading…</div>}
@@ -188,7 +201,7 @@ export default function Buckets() {
         )}
 
         {filtered.map(b => (
-          <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px 100px 90px', gap: '10px', padding: '13px 16px', borderBottom: '1px solid var(--line-soft)', alignItems: 'center' }}>
+          <div key={b.id} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px 100px 80px 90px', gap: '10px', padding: '13px 16px', borderBottom: '1px solid var(--line-soft)', alignItems: 'center' }}>
             <div>
               <div className="mono" style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--fg)', marginBottom: '3px' }}>{b.bucket_name}</div>
               <div style={{ fontSize: '12px', color: 'var(--fg-2)' }}>{b.user_email}</div>
@@ -205,6 +218,20 @@ export default function Buckets() {
             </div>
             <div>
               <span style={{ fontSize: '11px', fontWeight: 500, color: PLAN_COLOR[b.user_plan] || 'var(--fg-2)' }}>{b.user_plan}</span>
+            </div>
+            <div>
+              <button
+                onClick={() => togglePublic(b)}
+                title={b.public_read ? 'Unsigned GET/HEAD allowed on objects. Click to make private.' : 'Signed requests only. Click to make public.'}
+                style={{
+                  fontSize: '11px', fontWeight: 500, padding: '3px 8px', borderRadius: '10px', cursor: 'pointer', fontFamily: 'inherit',
+                  border: '1px solid var(--line-soft)',
+                  background: b.public_read ? 'oklch(0.85 0.135 90 / .12)' : 'transparent',
+                  color: b.public_read ? 'var(--butter)' : 'var(--fg-3)',
+                }}
+              >
+                {b.public_read ? 'Public' : 'Private'}
+              </button>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button
