@@ -29,10 +29,37 @@ vi.mock('../src/services/files.js', async (importOriginal) => {
         data.on('error', reject);
       });
     }),
+    // Chunked uploads: a tiny in-memory stand-in for the storage node's view of
+    // in-progress uploads, so listMultipartParts reflects what was actually PUT.
+    startMultipartUpload: vi.fn(async () => {
+      const uploadId = `up-${++fakeUploadSeq}`;
+      fakeParts.set(uploadId, new Map());
+      return uploadId;
+    }),
+    uploadMultipartPart: vi.fn(async (bucketName, key, uploadId, partNumber, data) => {
+      fakeParts.get(uploadId).set(partNumber, data.length);
+      return `etag-${partNumber}`;
+    }),
+    listMultipartParts: vi.fn(async (bucketName, key, uploadId) =>
+      [...(fakeParts.get(uploadId) || new Map())].map(([part, size]) => ({ part, size, etag: `etag-${part}` }))
+    ),
+    completeMultipartUpload: vi.fn(async () => {}),
+    abortMultipartUpload: vi.fn(async (bucketName, key, uploadId) => { fakeParts.delete(uploadId); }),
   };
 });
 
-const { uploadFile: mockUploadFile } = await import('../src/services/files.js');
+let fakeUploadSeq = 0;
+const fakeParts = new Map();
+
+const {
+  uploadFile: mockUploadFile,
+  startMultipartUpload: mockStart,
+  uploadMultipartPart: mockUploadPart,
+  completeMultipartUpload: mockComplete,
+  abortMultipartUpload: mockAbort,
+} = await import('../src/services/files.js');
+const { MULTIPART_PART_SIZE } = await import('../src/api/files.js');
+const { MultipartUploadModel } = await import('../src/db/models/MultipartUpload.js');
 
 let app;
 
@@ -133,5 +160,148 @@ describe('POST /api/v1/files/upload', () => {
     const [, , dataArg] = mockUploadFile.mock.calls[0];
     expect(Buffer.isBuffer(dataArg)).toBe(false);
     expect(typeof dataArg.pipe).toBe('function');
+  });
+});
+
+// ─── /api/v1/files/multipart (chunked uploads) ─────────────────────────────────
+
+function initRequest(token, size, filename = 'big.bin', prefix = '') {
+  return app.inject({
+    method: 'POST',
+    url: '/api/v1/files/multipart',
+    headers: { Authorization: `Bearer ${token}` },
+    payload: { filename, prefix, size, contentType: 'video/mp4' },
+  });
+}
+
+function partRequest(token, uploadId, partNumber, size) {
+  return app.inject({
+    method: 'PUT',
+    url: `/api/v1/files/multipart/${encodeURIComponent(uploadId)}/parts/${partNumber}`,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' },
+    payload: Buffer.alloc(size),
+  });
+}
+
+function completeRequest(token, uploadId) {
+  return app.inject({
+    method: 'POST',
+    url: `/api/v1/files/multipart/${encodeURIComponent(uploadId)}/complete`,
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// Two parts: one full-size, one 10-byte tail.
+const TWO_PART_SIZE = MULTIPART_PART_SIZE + 10;
+
+describe('/api/v1/files/multipart', () => {
+  it('uploads a file in parts and credits its size on completion', async () => {
+    const { token, id } = await setupUserWithQuota(1);
+
+    const init = await initRequest(token, TWO_PART_SIZE, 'big.bin', 'videos/');
+    expect(init.statusCode).toBe(200);
+    const { uploadId, key, partSize, partCount } = init.json();
+    expect(key).toBe('videos/big.bin');
+    expect(partSize).toBe(MULTIPART_PART_SIZE);
+    expect(partCount).toBe(2);
+
+    // Out of order on purpose — the browser sends parts concurrently.
+    expect((await partRequest(token, uploadId, 2, 10)).statusCode).toBe(200);
+    expect((await partRequest(token, uploadId, 1, MULTIPART_PART_SIZE)).statusCode).toBe(200);
+
+    const done = await completeRequest(token, uploadId);
+    expect(done.statusCode).toBe(200);
+    expect(done.json().uploaded[0]).toEqual({ filename: 'videos/big.bin', size: TWO_PART_SIZE });
+
+    const storageUploadId = await mockStart.mock.results[0].value;
+    expect(mockComplete).toHaveBeenCalledWith(expect.any(String), 'videos/big.bin', storageUploadId, [
+      { part: 1, etag: 'etag-1' },
+      { part: 2, etag: 'etag-2' },
+    ]);
+    const bucket = await BucketModel.findByUserId(id);
+    expect(bucket.current_usage_bytes).toBe(TWO_PART_SIZE);
+    expect(await MultipartUploadModel.findForUser(uploadId, id)).toBeNull();
+  });
+
+  it('rejects at init when the declared size exceeds remaining quota', async () => {
+    const { token, id } = await setupUserWithQuota(1);
+    const bucket = await BucketModel.findByUserId(id);
+    await BucketModel.update(bucket._id.toString(), { quota_bytes: 100, current_usage_bytes: 0 });
+
+    const res = await initRequest(token, 101);
+    expect(res.statusCode).toBe(403);
+    expect(mockStart).not.toHaveBeenCalled();
+  });
+
+  it('rejects a part whose size does not match its slot', async () => {
+    const { token } = await setupUserWithQuota(1);
+    const { uploadId } = (await initRequest(token, TWO_PART_SIZE)).json();
+
+    // The tail part must be exactly 10 bytes — anything else would let the
+    // assembled object drift from the size quota was checked against.
+    const res = await partRequest(token, uploadId, 2, 11);
+    expect(res.statusCode).toBe(400);
+    expect(mockUploadPart).not.toHaveBeenCalled();
+
+    expect((await partRequest(token, uploadId, 3, 10)).statusCode).toBe(400);
+  });
+
+  it("does not let another user touch someone else's upload", async () => {
+    const { token } = await setupUserWithQuota(1);
+    const { uploadId } = (await initRequest(token, TWO_PART_SIZE)).json();
+
+    const other = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/signup',
+      payload: { email: 'other@example.com', password: PASSWORD },
+    });
+    const { token: otherToken, id: otherId } = other.json();
+    await UserModel.update(otherId, { email_verified: true });
+
+    expect((await partRequest(otherToken, uploadId, 2, 10)).statusCode).toBe(404);
+    expect((await completeRequest(otherToken, uploadId)).statusCode).toBe(404);
+    expect(mockUploadPart).not.toHaveBeenCalled();
+  });
+
+  it('refuses to complete while parts are missing', async () => {
+    const { token, id } = await setupUserWithQuota(1);
+    const { uploadId } = (await initRequest(token, TWO_PART_SIZE)).json();
+    await partRequest(token, uploadId, 2, 10);
+
+    const res = await completeRequest(token, uploadId);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('incomplete_upload');
+    expect(mockComplete).not.toHaveBeenCalled();
+    // Still in progress — the client can send the missing part and retry.
+    expect(await MultipartUploadModel.findForUser(uploadId, id)).not.toBeNull();
+  });
+
+  it('re-checks quota at completion and aborts if usage grew since init', async () => {
+    const { token, id } = await setupUserWithQuota(1);
+    const { uploadId } = (await initRequest(token, 15)).json(); // single 15-byte part
+    await partRequest(token, uploadId, 1, 15);
+
+    const bucket = await BucketModel.findByUserId(id);
+    await BucketModel.update(bucket._id.toString(), { quota_bytes: 20, current_usage_bytes: 10 });
+
+    const res = await completeRequest(token, uploadId);
+    expect(res.statusCode).toBe(403);
+    expect(mockComplete).not.toHaveBeenCalled();
+    expect(mockAbort).toHaveBeenCalledWith(expect.any(String), 'big.bin', await mockStart.mock.results[0].value);
+    expect((await BucketModel.findByUserId(id)).current_usage_bytes).toBe(10);
+  });
+
+  it('cancels an upload, after which its parts are rejected', async () => {
+    const { token } = await setupUserWithQuota(1);
+    const { uploadId } = (await initRequest(token, TWO_PART_SIZE)).json();
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/files/multipart/${encodeURIComponent(uploadId)}`,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockAbort).toHaveBeenCalledTimes(1);
+    expect((await partRequest(token, uploadId, 2, 10)).statusCode).toBe(404);
   });
 });

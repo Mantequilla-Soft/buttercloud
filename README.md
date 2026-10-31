@@ -306,7 +306,11 @@ POST   /api/v1/credentials              Create API key
 DELETE /api/v1/credentials/:id          Revoke API key
 GET    /api/v1/bucket                   Current user's bucket name and region
 GET    /api/v1/files                    List files
-POST   /api/v1/files/upload             Upload file
+POST   /api/v1/files/upload             Upload file (single request; dashboard uses it up to 16 MB)
+POST   /api/v1/files/multipart          Start a chunked upload {filename, prefix, size}
+PUT    /api/v1/files/multipart/:id/parts/:n  Upload one 16 MiB part (raw body)
+POST   /api/v1/files/multipart/:id/complete  Assemble the parts into the file
+DELETE /api/v1/files/multipart/:id      Cancel a chunked upload
 GET    /api/v1/files/download/:key      Download file
 DELETE /api/v1/files/:key               Delete file
 POST   /api/v1/files/mkdir              Create folder

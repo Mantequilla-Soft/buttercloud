@@ -20,6 +20,7 @@ import { registerAdminBucketRoutes } from './api/admin/buckets.js';
 import { registerAdminBillingRoutes } from './api/admin/billing.js';
 import { registerFileRoutes } from './api/files.js';
 import { reconcileNodeUsage } from './services/reconcile.js';
+import { abortStaleMultipartUploads } from './services/files.js';
 import { generateMonthlyInvoices, previousMonth, markOverdueAndNotify } from './services/billing.js';
 import { checkAndSendQuotaWarnings } from './services/quotaWarnings.js';
 import { pollHivePayments } from './services/hivePayments.js';
@@ -155,6 +156,16 @@ export async function startServer() {
   // Reconcile hourly to catch any drift
   setInterval(async () => {
     try { await reconcileNodeUsage(); } catch {}
+  }, 60 * 60 * 1000);
+
+  // Hourly: abort chunked dashboard uploads abandoned for over a day
+  setInterval(async () => {
+    try {
+      const aborted = await abortStaleMultipartUploads();
+      if (aborted > 0) console.log(`Aborted ${aborted} stale chunked upload(s)`);
+    } catch (e) {
+      console.warn('abortStaleMultipartUploads failed (non-fatal):', e.message);
+    }
   }, 60 * 60 * 1000);
 
   // Poll HIVE/HBD payments every 60s
