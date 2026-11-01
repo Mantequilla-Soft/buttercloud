@@ -1,6 +1,23 @@
 import { ObjectId } from 'mongodb';
 import { quotas } from '../index.js';
 
+// Flat input field → document path. Shared by update() and the admin plans API
+// so the set of editable fields is defined in one place.
+export const FIELD_PATHS = {
+  storage_gb: 'limits.storage_gb',
+  monthly_transfer_gb: 'limits.monthly_transfer_gb',
+  monthly_requests: 'limits.monthly_requests',
+  max_object_size_gb: 'limits.max_object_size_gb',
+  max_buckets: 'limits.max_buckets',
+  base_monthly_usd: 'pricing.base_monthly_usd',
+  storage_overage_per_gb_usd: 'pricing.storage_overage_per_gb_usd',
+  transfer_overage_per_gb_usd: 'pricing.transfer_overage_per_gb_usd',
+  request_overage_per_1m_usd: 'pricing.request_overage_per_1m_usd',
+  supports_replication: 'features.supports_replication',
+  supports_lifecycle_policies: 'features.supports_lifecycle_policies',
+  api_support: 'features.api_support',
+};
+
 export class QuotaModel {
   static async create(data) {
     const quota = {
@@ -40,31 +57,36 @@ export class QuotaModel {
     return quotas().find({ active: true }).toArray();
   }
 
-  static async update(plan, data) {
-    const result = await quotas().findOneAndUpdate(
+  // Partial update — only fields present in `data` are written. Writing every
+  // field unconditionally would null out anything the caller left undefined
+  // (e.g. a pricing-only edit wiping the plan's limits).
+  static async update(plan, data, { updatedBy = null } = {}) {
+    const $set = {};
+    for (const [key, path] of Object.entries(FIELD_PATHS)) {
+      if (data[key] !== undefined) $set[path] = data[key];
+    }
+    if (Object.keys($set).length === 0) return QuotaModel.findByPlan(plan);
+
+    $set.updated_at = new Date();
+    if (updatedBy) $set.updated_by = updatedBy;
+
+    return quotas().findOneAndUpdate({ plan }, { $set }, { returnDocument: 'after' });
+  }
+
+  // Appends to the plan's change log (most recent last, capped so the document
+  // can't grow without bound).
+  static async recordChange(plan, entry) {
+    return quotas().updateOne(
       { plan },
-      {
-        $set: {
-          'limits.storage_gb': data.storage_gb,
-          'limits.monthly_transfer_gb': data.monthly_transfer_gb,
-          'limits.monthly_requests': data.monthly_requests,
-          'limits.max_object_size_gb': data.max_object_size_gb,
-          'limits.max_buckets': data.max_buckets,
-          'pricing.base_monthly_usd': data.base_monthly_usd,
-          'pricing.storage_overage_per_gb_usd': data.storage_overage_per_gb_usd,
-          'pricing.transfer_overage_per_gb_usd': data.transfer_overage_per_gb_usd,
-          'pricing.request_overage_per_1m_usd': data.request_overage_per_1m_usd,
-          'features.supports_replication': data.supports_replication,
-          'features.supports_lifecycle_policies': data.supports_lifecycle_policies,
-          'features.api_support': data.api_support,
-        },
-      },
-      { returnDocument: 'after' }
+      { $push: { change_history: { $each: [entry], $slice: -100 } } }
     );
-    return result;
   }
 
   static async deactivate(plan) {
-    return QuotaModel.update(plan, { active: false });
+    return quotas().findOneAndUpdate(
+      { plan },
+      { $set: { active: false, updated_at: new Date() } },
+      { returnDocument: 'after' }
+    );
   }
 }

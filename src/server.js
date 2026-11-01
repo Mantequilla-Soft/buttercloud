@@ -18,6 +18,7 @@ import { registerAdminUserRoutes } from './api/admin/users.js';
 import { registerAdminNodeRoutes } from './api/admin/nodes.js';
 import { registerAdminBucketRoutes } from './api/admin/buckets.js';
 import { registerAdminBillingRoutes } from './api/admin/billing.js';
+import { registerAdminPlanRoutes } from './api/admin/plans.js';
 import { registerFileRoutes } from './api/files.js';
 import { reconcileNodeUsage } from './services/reconcile.js';
 import { abortStaleMultipartUploads } from './services/files.js';
@@ -120,6 +121,7 @@ export async function createServer() {
   await registerAdminNodeRoutes(fastify);
   await registerAdminBucketRoutes(fastify);
   await registerAdminBillingRoutes(fastify);
+  await registerAdminPlanRoutes(fastify);
   await registerFileRoutes(fastify);
 
   // Register S3 gateway (catch-all route, must be last)

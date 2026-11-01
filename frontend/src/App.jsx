@@ -21,6 +21,7 @@ import ClientDetail from './pages/admin/ClientDetail';
 import AdminNodes from './pages/admin/Nodes';
 import AdminBuckets from './pages/admin/Buckets';
 import AdminBilling from './pages/admin/Billing';
+import AdminPlans from './pages/admin/Plans';
 
 function P({ children }) {
   return <ProtectedRoute>{children}</ProtectedRoute>;
@@ -54,6 +55,7 @@ function App() {
           <Route path="/admin/nodes"   element={<A><AdminNodes /></A>} />
           <Route path="/admin/buckets"  element={<A><AdminBuckets /></A>} />
           <Route path="/admin/billing" element={<A><AdminBilling /></A>} />
+          <Route path="/admin/plans"   element={<A><AdminPlans /></A>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

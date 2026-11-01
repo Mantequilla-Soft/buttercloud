@@ -12,6 +12,7 @@ export default function AdminLayout({ title, children }) {
     { label: 'Nodes',      path: '/admin/nodes',    icon: I.bucket },
     { label: 'Buckets',    path: '/admin/buckets',  icon: I.folder },
     { label: 'Billing',    path: '/admin/billing',  icon: I.card },
+    { label: 'Plans',      path: '/admin/plans',    icon: I.tag },
   ];
 
   return (

@@ -50,6 +50,17 @@ export class BucketModel {
     return { items, total };
   }
 
+  // Used when a plan's storage limit changes — quota_bytes is otherwise only set
+  // at bucket creation, so existing buckets would keep the old cap.
+  static async setQuotaForUsers(userIds, quotaBytes) {
+    if (userIds.length === 0) return 0;
+    const result = await buckets().updateMany(
+      { user_id: { $in: userIds }, deleted_at: null },
+      { $set: { quota_bytes: quotaBytes, updated_at: new Date() } }
+    );
+    return result.modifiedCount;
+  }
+
   static async update(bucketId, data) {
     const result = await buckets().findOneAndUpdate(
       { _id: new ObjectId(bucketId) },

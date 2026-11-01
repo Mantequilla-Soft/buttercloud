@@ -27,3 +27,5 @@ export const getHealth   = (token)             => req(token, '/api/v1/admin/node
 export const getBuckets  = (token)             => req(token, '/api/v1/admin/buckets');
 export const updateBucket  = (token, id, body) => req(token, `/api/v1/admin/buckets/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 export const migrateBucket = (token, id, body) => req(token, `/api/v1/admin/buckets/${id}/migrate`, { method: 'POST', body: JSON.stringify(body) });
+export const getPlans    = (token)             => req(token, '/api/v1/admin/plans');
+export const updatePlan  = (token, plan, body) => req(token, `/api/v1/admin/plans/${plan}`, { method: 'PATCH', body: JSON.stringify(body) });

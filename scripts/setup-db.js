@@ -95,6 +95,7 @@ async function createIndexes() {
 }
 
 async function seedQuotas() {
+  // Initial values for new installs only — see the create-only note below.
   // All monetary values in cents. Transfer = 10x storage (our pattern).
   const quotas = [
     {
@@ -179,12 +180,19 @@ async function seedQuotas() {
     },
   ];
 
-  // Upsert — re-running setup-db always applies latest values
+  // Create-only by default: once a plan exists, its rates and limits belong to
+  // the admin dashboard (PATCH /api/v1/admin/plans/:plan), and update.sh re-runs
+  // this script on every deploy — overwriting here would silently revert admin
+  // edits. Pass --reset-plans to force the values below back onto existing plans.
+  const resetPlans = process.argv.includes('--reset-plans');
+
   for (const quotaData of quotas) {
     const existing = await QuotaModel.findByPlan(quotaData.plan);
-    if (existing) {
+    if (existing && resetPlans) {
       await QuotaModel.update(quotaData.plan, quotaData);
-      console.log(`  ↺ Updated ${quotaData.plan} quota plan`);
+      console.log(`  ↺ Reset ${quotaData.plan} quota plan to seed values`);
+    } else if (existing) {
+      console.log(`  ℹ ${quotaData.plan} quota plan exists (left as-is; --reset-plans to overwrite)`);
     } else {
       await QuotaModel.create(quotaData);
       console.log(`  ✓ Seeded ${quotaData.plan} quota plan`);
