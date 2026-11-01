@@ -66,12 +66,14 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 
 ## Plans
 
-| Plan | Storage | Transfer/mo | Max file | Price |
-|------|---------|-------------|----------|-------|
-| Free | 500 MB | 5 GB | 500 MB | $0 |
-| Starter | 100 GB | 1 TB | 5 GB | $6.25/mo |
-| Professional | 1 TB | 10 TB | 10 GB | $37.49/mo |
-| Enterprise | 10 TB | 100 TB | 50 GB | $124.99/mo |
+| Plan | Storage | Transfer/mo | Max file | Price | Overage (storage / transfer) |
+|------|---------|-------------|----------|-------|------------------------------|
+| Free | 10 GB | 30 GB | 500 MB | $0 | none (uploads blocked at the limit) |
+| Starter | 1 TB | 3 TB | 5 GB | $5/mo | $5/TB / $5/TB |
+| Professional | 10 TB | 30 TB | 10 GB | $40/mo | $4.50/TB / $4/TB |
+| Enterprise | 100 TB | 300 TB | 50 GB | $350/mo | $4/TB / $3/TB |
+
+These are the defaults `scripts/setup-db.js` seeds on a fresh install. After that, plans are edited live in Admin → Plans (`PATCH /api/v1/admin/plans/:plan`); re-running the setup script leaves existing plans alone unless you pass `--reset-plans`.
 
 There's also a `house` plan — not publicly selectable, admin-assigned only (`PATCH /api/v1/admin/users/:id` with `{ "plan": "house" }`). It's for accounts that shouldn't be billed (e.g. your own infrastructure's own storage use) while still being fully usage-tracked: `base_monthly_usd` and every overage rate are `0`, so it generates a real, auditable $0 invoice every month rather than being silently excluded from billing.
 
