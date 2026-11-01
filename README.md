@@ -251,7 +251,7 @@ Browser / AWS SDK
 5. Admin can also mark any invoice paid manually
 ```
 
-Invoices are idempotent — generating twice for the same month skips existing records.
+Invoices are idempotent — generating twice for the same month skips existing records. Invoices use each plan's rates as they stand when the invoice is generated, so a rate change in Admin → Plans applies to the month in progress, not just future months.
 
 ## Payments
 
@@ -348,6 +348,12 @@ PATCH  /api/v1/admin/billing/:id          Update invoice status
 POST   /api/v1/admin/billing/:id/comp     Waive an invoice immediately — issues a
                                            matching credit and marks it 'comped'
                                            (distinct from 'paid')
+GET    /api/v1/admin/plans                List plans — limits, rates, user count,
+                                           recent change history
+PATCH  /api/v1/admin/plans/:plan          Edit a plan's limits/rates (partial; money
+                                           in cents, per-GB rates may be fractional).
+                                           Changing storage_gb also resizes existing
+                                           buckets on that plan
 ```
 
 ## Adding More Storage
