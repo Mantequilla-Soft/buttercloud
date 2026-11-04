@@ -27,7 +27,7 @@ function MigrateModal({ bucket, nodes, onConfirm, onCancel }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / .6)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <form onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '440px' }}>
+      <form className="modal-card" onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '440px' }}>
         <h3 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: 600 }}>Migrate Bucket</h3>
         <p style={{ margin: '0 0 20px', fontSize: '12px', color: 'var(--fg-2)' }}>
           Moving <strong style={{ color: 'var(--fg)' }}>{bucket.bucket_name}</strong> owned by <strong style={{ color: 'var(--fg)' }}>{bucket.user_email}</strong>.
@@ -171,7 +171,7 @@ export default function Buckets() {
 
   return (
     <AdminLayout title="Buckets">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+      <div className="page-hd" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
         <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>
           Buckets <span style={{ color: 'var(--fg-3)', fontSize: '14px', fontWeight: 400 }}>({buckets.length})</span>
         </h1>
@@ -189,7 +189,7 @@ export default function Buckets() {
       {error && <div style={{ padding: '10px 14px', marginBottom: '16px', background: 'oklch(0.72 0.145 25 / .15)', border: '1px solid oklch(0.72 0.145 25 / .4)', borderRadius: '8px', color: 'var(--coral)', fontSize: '13px' }}>{error}</div>}
       {lastResult && <ResultBanner result={lastResult} onClose={() => setLastResult(null)} />}
 
-      <div className="files">
+      <div className="files table-wide">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px 140px 100px 80px 90px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
           <span>Bucket / Owner</span><span>Node</span><span>Usage</span><span>Plan</span><span>Access</span><span></span>
         </div>

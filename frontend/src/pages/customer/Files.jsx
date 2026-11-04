@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import Layout from '../../components/Layout';
 import Sidebar from '../../components/Sidebar';
-import TopBar from '../../components/TopBar';
+import { NavToggle, NavBackdrop } from '../../components/MobileNav';
 import { useAuth } from '../../hooks/useAuth';
 import { listFiles, uploadFile, downloadFile, deleteFile } from '../../api/files';
 import { formatBytes, getFileType } from '../../utils/format';
 import { I } from '../../components/Icons';
 
 // ─── Detail Rail ────────────────────────────────────────────────────────────
+
+const isTouch = () => window.matchMedia?.('(hover: none)').matches;
 
 const PREVIEW_SIZE_LIMIT = 50 * 1024 * 1024; // auto-fetch up to 50 MB
 
@@ -166,6 +168,7 @@ function NewFolderModal({ prefix, onConfirm, onCancel }) {
       display: 'grid', placeItems: 'center', zIndex: 200,
     }}>
       <form
+        className="modal-card"
         onSubmit={handleSubmit}
         style={{
           background: 'var(--bg-2)', border: '1px solid var(--line-soft)',
@@ -328,9 +331,11 @@ export default function Files() {
   return (
     <div className={`app${showRail ? '' : ' rail-closed'}`}>
       <Sidebar />
+      <NavBackdrop />
 
       {/* Top bar with breadcrumbs + actions */}
       <header className="topbar">
+        <NavToggle />
         <div className="crumbs">
           <span className="crumb">Files</span>
           {breadcrumbs.map((crumb, i) => (
@@ -342,10 +347,10 @@ export default function Files() {
         </div>
         <div className="topbar-actions">
           <button className="btn" onClick={() => setShowNewFolder(true)}>
-            {I.plus({ size: 14 })} New folder
+            {I.plus({ size: 14 })} <span className="btn-label">New folder</span>
           </button>
           <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            {I.upload({ size: 14 })} {uploading ? 'Uploading…' : 'Upload'}
+            {I.upload({ size: 14 })} <span className="btn-label">{uploading ? 'Uploading…' : 'Upload'}</span>
           </button>
           <input ref={fileInputRef} type="file" multiple onChange={handleUpload} style={{ display: 'none' }} />
         </div>
@@ -405,7 +410,7 @@ export default function Files() {
 
             {/* Folders */}
             {folders.map(folder => (
-              <div key={folder.key} className="row no-cost" onDoubleClick={() => navigateInto(folder.key)} style={{ cursor: 'default' }}>
+              <div key={folder.key} className="row no-cost" onDoubleClick={() => navigateInto(folder.key)} onClick={() => { if (isTouch()) navigateInto(folder.key); }} style={{ cursor: 'default' }}>
                 <span className="cb" />
                 <div className="ico folder">{I.folder({ size: 13 })}</div>
                 <div className="fname"><span className="name">{folder.name}</span></div>

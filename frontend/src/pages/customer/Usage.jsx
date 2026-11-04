@@ -97,7 +97,7 @@ export default function Usage() {
 
   return (
     <Layout title="Usage">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+      <div className="page-hd" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '24px' }}>
         <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Usage</h1>
         <select
           value={month}
