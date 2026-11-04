@@ -70,3 +70,7 @@ export function auditLog() {
 export function credits() {
   return getDB().collection('credits');
 }
+
+export function multipartUploads() {
+  return getDB().collection('multipart_uploads');
+}

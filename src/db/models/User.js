@@ -71,6 +71,19 @@ export class UserModel {
     return { items, total };
   }
 
+  static async idsByPlan(plan) {
+    const docs = await users().find({ plan, deleted_at: null }, { projection: { _id: 1 } }).toArray();
+    return docs.map(d => d._id);
+  }
+
+  // { [plan]: number of non-deleted users on it }
+  static async countByPlan() {
+    const rows = await users()
+      .aggregate([{ $match: { deleted_at: null } }, { $group: { _id: '$plan', count: { $sum: 1 } } }])
+      .toArray();
+    return Object.fromEntries(rows.map(r => [r._id, r.count]));
+  }
+
   static async softDelete(userId) {
     return UserModel.update(userId, { deleted_at: new Date(), active: false });
   }

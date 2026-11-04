@@ -8,7 +8,7 @@ function NewKeyModal({ onConfirm, onCancel }) {
   const [name, setName] = useState('');
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / .6)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <div style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '24px', width: '360px' }}>
+      <div className="modal-card" style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '24px', width: '360px' }}>
         <h3 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: 600 }}>New API Key</h3>
         <p style={{ margin: '0 0 16px', fontSize: '12px', color: 'var(--fg-2)' }}>Give this key a name so you can identify it later.</p>
         <input
@@ -41,7 +41,7 @@ function SecretModal({ credential, onClose }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / .6)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <div style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px' }}>
+      <div className="modal-card" style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px' }}>
         <h3 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: 600 }}>API Key Created</h3>
         <p style={{ margin: '0 0 20px', fontSize: '12px', color: 'var(--fg-2)' }}>
           Copy your secret key now — it <strong style={{ color: 'var(--coral)' }}>will not be shown again</strong>.
@@ -109,7 +109,7 @@ export default function Keys() {
 
   return (
     <Layout title="API Keys">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+      <div className="page-hd" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
         <div>
           <h1 style={{ margin: '0 0 4px', fontSize: '20px', fontWeight: 600 }}>API Keys</h1>
           <p style={{ margin: 0, fontSize: '13px', color: 'var(--fg-2)' }}>Use these credentials to authenticate S3 requests against your bucket.</p>
@@ -124,7 +124,7 @@ export default function Keys() {
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fg-2)' }}>Loading…</div>
       ) : (
-        <div className="files">
+        <div className="files table-wide">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 80px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
             <span>Name / Access Key</span><span>Created</span><span>Last used</span><span></span>
           </div>

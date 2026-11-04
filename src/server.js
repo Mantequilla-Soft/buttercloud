@@ -18,8 +18,10 @@ import { registerAdminUserRoutes } from './api/admin/users.js';
 import { registerAdminNodeRoutes } from './api/admin/nodes.js';
 import { registerAdminBucketRoutes } from './api/admin/buckets.js';
 import { registerAdminBillingRoutes } from './api/admin/billing.js';
+import { registerAdminPlanRoutes } from './api/admin/plans.js';
 import { registerFileRoutes } from './api/files.js';
 import { reconcileNodeUsage } from './services/reconcile.js';
+import { abortStaleMultipartUploads } from './services/files.js';
 import { generateMonthlyInvoices, previousMonth, markOverdueAndNotify } from './services/billing.js';
 import { checkAndSendQuotaWarnings } from './services/quotaWarnings.js';
 import { pollHivePayments } from './services/hivePayments.js';
@@ -87,11 +89,17 @@ export async function createServer() {
       // the current build's content-hashed asset filenames, so a stale cached
       // copy keeps serving an old JS bundle after every deploy. Everything under
       // /assets/ is safe to cache hard: Vite hashes the filename itself, so a
-      // changed file is a new URL, never a mutated one.
+      // changed file is a new URL, never a mutated one. The service worker and
+      // manifest keep stable URLs, so they're revalidated like index.html; other
+      // unhashed root files (icons) get a day.
       setHeaders: (res, path) => {
         res.setHeader(
           'Cache-Control',
-          path.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable'
+          /(index\.html|sw\.js|manifest\.webmanifest)$/.test(path)
+            ? 'no-cache'
+            : path.includes('/assets/')
+              ? 'public, max-age=31536000, immutable'
+              : 'public, max-age=86400'
         );
       },
     });
@@ -119,6 +127,7 @@ export async function createServer() {
   await registerAdminNodeRoutes(fastify);
   await registerAdminBucketRoutes(fastify);
   await registerAdminBillingRoutes(fastify);
+  await registerAdminPlanRoutes(fastify);
   await registerFileRoutes(fastify);
 
   // Register S3 gateway (catch-all route, must be last)
@@ -155,6 +164,16 @@ export async function startServer() {
   // Reconcile hourly to catch any drift
   setInterval(async () => {
     try { await reconcileNodeUsage(); } catch {}
+  }, 60 * 60 * 1000);
+
+  // Hourly: abort chunked dashboard uploads abandoned for over a day
+  setInterval(async () => {
+    try {
+      const aborted = await abortStaleMultipartUploads();
+      if (aborted > 0) console.log(`Aborted ${aborted} stale chunked upload(s)`);
+    } catch (e) {
+      console.warn('abortStaleMultipartUploads failed (non-fatal):', e.message);
+    }
   }, 60 * 60 * 1000);
 
   // Poll HIVE/HBD payments every 60s

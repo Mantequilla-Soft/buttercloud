@@ -41,7 +41,7 @@ function GenerateModal({ onConfirm, onCancel }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / .6)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <div style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px' }}>
+      <div className="modal-card" style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px' }}>
         <h3 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: 600 }}>Generate Invoices</h3>
         <p style={{ margin: '0 0 20px', fontSize: '12px', color: 'var(--fg-2)', lineHeight: 1.6 }}>
           Creates invoices for all active users based on their usage and plan pricing. Safe to run multiple times — existing invoices are skipped.
@@ -130,7 +130,7 @@ export default function AdminBilling() {
 
   return (
     <AdminLayout title="Billing">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+      <div className="page-hd" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
         <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Billing</h1>
         <button className="btn primary" onClick={() => setShowGenerate(true)}>
           {I.zap({ size: 14 })} Generate Invoices
@@ -171,7 +171,7 @@ export default function AdminBilling() {
         </div>
       )}
 
-      <div className="files">
+      <div className="files table-wide">
         <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 80px 90px 230px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
           <span>Month</span><span>User</span><span style={{ textAlign: 'right' }}>Base</span><span style={{ textAlign: 'right' }}>Extra</span><span style={{ textAlign: 'right' }}>Total</span><span></span>
         </div>

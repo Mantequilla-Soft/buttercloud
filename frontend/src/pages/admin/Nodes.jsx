@@ -35,7 +35,7 @@ function AddNodeModal({ onSave, onCancel }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / .6)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <form onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
+      <form className="modal-card" onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
         <h3 style={{ margin: '0 0 20px', fontSize: '15px', fontWeight: 600 }}>Add Storage Node</h3>
 
         {error && <div style={{ padding: '10px 12px', marginBottom: '14px', background: 'oklch(0.72 0.145 25 / .15)', color: 'var(--coral)', borderRadius: '6px', fontSize: '12px' }}>{error}</div>}
@@ -111,7 +111,7 @@ function EditNodeModal({ node, onSave, onCancel }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'oklch(0 0 0 / .6)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
-      <form onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
+      <form className="modal-card" onSubmit={handleSubmit} style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '28px', width: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
         <h3 style={{ margin: '0 0 20px', fontSize: '15px', fontWeight: 600 }}>Edit Node — {node.name}</h3>
 
         {error && <div style={{ padding: '10px 12px', marginBottom: '14px', background: 'oklch(0.72 0.145 25 / .15)', color: 'var(--coral)', borderRadius: '6px', fontSize: '12px' }}>{error}</div>}
@@ -222,7 +222,7 @@ export default function Nodes() {
 
   return (
     <AdminLayout title="Storage Nodes">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+      <div className="page-hd" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
         <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Storage Nodes</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button className="btn ghost" onClick={handleSync} disabled={syncing}>

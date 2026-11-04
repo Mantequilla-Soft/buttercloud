@@ -55,7 +55,7 @@ export default function Billing() {
           <div style={{ fontSize: '12px' }}>Invoices appear here at the end of each billing period.</div>
         </div>
       ) : (
-        <div className="files">
+        <div className="files table-wide">
           <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 100px 100px 100px 90px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
             <span>Period</span><span>Breakdown</span><span style={{ textAlign: 'right' }}>Storage</span><span style={{ textAlign: 'right' }}>Transfer</span><span style={{ textAlign: 'right' }}>Total</span><span style={{ textAlign: 'right' }}>Status</span>
           </div>

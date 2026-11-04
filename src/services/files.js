@@ -1,6 +1,7 @@
 import * as Minio from 'minio';
 import { BucketModel } from '../db/models/Bucket.js';
 import { StorageNodeModel } from '../db/models/StorageNode.js';
+import { MultipartUploadModel } from '../db/models/MultipartUpload.js';
 import { config } from '../config.js';
 import { resolveNodeCredentials } from './nodeCredentials.js';
 
@@ -113,6 +114,70 @@ export async function uploadFile(bucketName, key, data, contentType) {
   // Only meaningful when `data` is a Buffer — a stream's size isn't known here;
   // callers streaming a file track the actual byte count themselves as it flows.
   return { key, size: Buffer.isBuffer(data) ? data.length : undefined };
+}
+
+// ─── Chunked uploads ──────────────────────────────────────────────────────────
+// The dashboard uploads large files part by part (see the /api/v1/files/multipart
+// routes) because Cloudflare in front of the API rejects any single request body
+// over 100 MB. These wrap the minio SDK's multipart calls. Note the SDK is
+// inconsistent about escaping: listParts/completeMultipartUpload escape the
+// uploadId themselves, uploadPart/abortMultipartUpload drop it into the query
+// string raw — so those two get it pre-escaped here.
+
+export async function startMultipartUpload(bucketName, key, contentType) {
+  const { client } = await getBucketAndNode(bucketName);
+  return client.initiateNewMultipartUpload(bucketName, key, {
+    'Content-Type': contentType || 'application/octet-stream',
+  });
+}
+
+// `data` must be a Buffer: the SDK needs the full body up front to set
+// Content-Length (and, against an http storage node, to sign its sha256).
+export async function uploadMultipartPart(bucketName, key, uploadId, partNumber, data) {
+  const { client } = await getBucketAndNode(bucketName);
+  const { etag } = await client.uploadPart(
+    { bucketName, objectName: key, uploadID: encodeURIComponent(uploadId), partNumber, headers: {} },
+    data
+  );
+  return etag;
+}
+
+export async function listMultipartParts(bucketName, key, uploadId) {
+  const { client } = await getBucketAndNode(bucketName);
+  return client.listParts(bucketName, key, uploadId); // [{ part, etag, size }]
+}
+
+export async function completeMultipartUpload(bucketName, key, uploadId, parts) {
+  const { client } = await getBucketAndNode(bucketName);
+  await client.completeMultipartUpload(bucketName, key, uploadId, parts);
+}
+
+export async function abortMultipartUpload(bucketName, key, uploadId) {
+  const { client } = await getBucketAndNode(bucketName);
+  await client.abortMultipartUpload(bucketName, key, encodeURIComponent(uploadId));
+}
+
+// Parts of an upload that's never completed or aborted (tab closed, laptop slept)
+// sit on the storage node taking space without showing up in the bucket listing
+// or anyone's usage. Run periodically from startServer. A record is only dropped
+// once the storage node confirms the upload is gone, so an unreachable node just
+// means it's retried on the next sweep.
+export async function abortStaleMultipartUploads(maxAgeMs = 24 * 60 * 60 * 1000) {
+  const stale = await MultipartUploadModel.listOlderThan(new Date(Date.now() - maxAgeMs));
+  let aborted = 0;
+  for (const upload of stale) {
+    try {
+      await abortMultipartUpload(upload.bucket_name, upload.key, upload.upload_id);
+    } catch (err) {
+      if (err.code !== 'NoSuchUpload') {
+        console.warn(`Failed to abort stale upload ${upload.upload_id}:`, err.message);
+        continue;
+      }
+    }
+    await MultipartUploadModel.delete(upload._id.toString());
+    aborted++;
+  }
+  return aborted;
 }
 
 export async function statFile(bucketName, key) {

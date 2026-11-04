@@ -864,3 +864,132 @@ button { font-family: inherit; }
 
 /* Focus tweak panel button slot */
 .twk-panel { background: rgba(34, 30, 22, .82) !important; color: var(--fg) !important; border-color: oklch(0.4 0.013 75 / .5) !important;}
+
+/* Email-verification banner (desktop: pinned under the top bar) */
+.verify-banner {
+  position: fixed; top: 56px; left: var(--side-w); right: 0; z-index: 100;
+  background: oklch(0.85 0.135 90 / .12);
+  border-bottom: 1px solid oklch(0.85 0.135 90 / .3);
+  padding: 9px 20px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  font-size: 12.5px;
+}
+.main.has-banner { padding-top: 52px; }
+
+/* Mobile-only controls are hidden on desktop */
+.nav-toggle, .nav-backdrop { display: none; }
+
+/* ─── Mobile / narrow screens ───────────────────────── */
+@media (max-width: 860px) {
+  /* Shell: single column, sidebar becomes an off-canvas drawer */
+  .app, .app.rail-closed {
+    display: flex; flex-direction: column;
+    height: 100vh; height: 100dvh;
+  }
+  .topbar {
+    flex: 0 0 56px;
+    padding: 0 10px 0 6px;
+    gap: 8px;
+    min-width: 0;
+  }
+  .main {
+    flex: 1 1 auto; min-height: 0;
+    padding: 16px 16px 48px 16px;
+  }
+
+  .nav-toggle { display: grid; flex: 0 0 auto; cursor: pointer; }
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: min(280px, 85vw);
+    z-index: 300;
+    overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform .22s ease;
+    box-shadow: 0 0 40px oklch(0 0 0 / .45);
+  }
+  body.nav-open .sidebar { transform: none; }
+  .nav-backdrop {
+    display: block;
+    position: fixed; inset: 0; z-index: 290;
+    background: oklch(0 0 0 / .5);
+    opacity: 0; pointer-events: none;
+    transition: opacity .22s ease;
+  }
+  body.nav-open .nav-backdrop { opacity: 1; pointer-events: auto; }
+  .nav-item { padding: 11px 10px; font-size: 14px; }
+
+  /* Top bar contents */
+  .crumbs { min-width: 0; overflow: hidden; white-space: nowrap; }
+  .crumbs .crumb.current { overflow: hidden; text-overflow: ellipsis; }
+  .topbar-actions { margin-left: auto; flex: 0 0 auto; }
+  .hide-mobile { display: none !important; }
+  .bucket-chip { max-width: 40vw; }
+  .bucket-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .topbar .btn .btn-label { display: none; }
+  .topbar .btn { padding: 0 10px; }
+
+  /* Verification banner flows in the column instead of floating */
+  .verify-banner { position: static; padding: 9px 16px; }
+  .main.has-banner { padding-top: 16px; }
+
+  /* File-details rail becomes a full-screen sheet */
+  .rail {
+    position: fixed; inset: 0; z-index: 250;
+    border-left: 0;
+  }
+  .preview-meta .nm { max-width: 70vw; }
+
+  /* Customer file browser: drop checkbox + modified columns, always show actions */
+  .files .head.no-cost, .files .row.no-cost {
+    grid-template-columns: 26px minmax(0, 1fr) auto auto;
+    padding-left: 12px; padding-right: 8px;
+  }
+  .files .head > :nth-child(1), .files .row > :nth-child(1),
+  .files .head > :nth-child(5), .files .row > :nth-child(5) { display: none; }
+  .files .row { height: 48px; }
+  .row-actions { opacity: 1; }
+  .row-actions button { width: 34px; height: 34px; }
+
+  /* Fixed-column data tables scroll sideways instead of crushing */
+  .files.table-wide { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .files.table-wide > * { min-width: 680px; }
+
+  /* Misc page layouts */
+  .split-side { grid-template-columns: 1fr !important; }
+  .field-row { grid-template-columns: 1fr !important; gap: 4px !important; }
+  .page-hd > div[style*="relative"], .page-hd input { width: 100% !important; }
+  .cost-strip { grid-template-columns: 1fr 1fr; }
+  .toolbar { flex-wrap: wrap; }
+  .modal-card {
+    max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+  }
+
+  /* Keep iOS from zooming into form fields (it does so below 16px) */
+  input, select, textarea { font-size: 16px !important; }
+
+  .toast { left: 16px; right: 16px; width: auto; }
+}
+
+/* Files shared into the installed app, waiting to be uploaded */
+.share-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; margin-bottom: 16px;
+  background: oklch(0.85 0.135 90 / .08);
+  border: 1px solid oklch(0.85 0.135 90 / .3);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.share-banner-text { flex: 1 1 220px; min-width: 0; }
+.share-banner-names {
+  margin-top: 2px; font-size: 12px; color: var(--fg-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Installed app: keep content clear of the notch / home indicator */
+@media (display-mode: standalone) {
+  .topbar { padding-top: env(safe-area-inset-top); flex-basis: calc(56px + env(safe-area-inset-top)); }
+  .main { padding-bottom: calc(48px + env(safe-area-inset-bottom)); }
+  .sidebar { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+}

@@ -186,7 +186,7 @@ export default function ClientDetail() {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px', alignItems: 'start' }}>
+      <div className="split-side" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px', alignItems: 'start' }}>
         <div>
           <h3 style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>Usage — last 6 months</h3>
           <div style={{ background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: 'var(--radius)', padding: '16px', marginBottom: '28px', height: '220px' }}>
@@ -209,7 +209,7 @@ export default function ClientDetail() {
               No invoices yet
             </div>
           ) : (
-            <div className="files">
+            <div className="files table-wide">
               <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px 70px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
                 <span>Period</span><span>Due</span><span style={{ textAlign: 'right' }}>Total</span><span style={{ textAlign: 'right' }}>Status</span><span></span>
               </div>

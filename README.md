@@ -66,12 +66,14 @@ aws_secret_access_key = "..."       # issued by Buttercloud
 
 ## Plans
 
-| Plan | Storage | Transfer/mo | Max file | Price |
-|------|---------|-------------|----------|-------|
-| Free | 500 MB | 5 GB | 500 MB | $0 |
-| Starter | 100 GB | 1 TB | 5 GB | $6.25/mo |
-| Professional | 1 TB | 10 TB | 10 GB | $37.49/mo |
-| Enterprise | 10 TB | 100 TB | 50 GB | $124.99/mo |
+| Plan | Storage | Transfer/mo | Max file | Price | Overage (storage / transfer) |
+|------|---------|-------------|----------|-------|------------------------------|
+| Free | 10 GB | 30 GB | 500 MB | $0 | none (uploads blocked at the limit) |
+| Starter | 1 TB | 3 TB | 5 GB | $5/mo | $5/TB / $5/TB |
+| Professional | 10 TB | 30 TB | 10 GB | $40/mo | $4.50/TB / $4/TB |
+| Enterprise | 100 TB | 300 TB | 50 GB | $350/mo | $4/TB / $3/TB |
+
+These are the defaults `scripts/setup-db.js` seeds on a fresh install. After that, plans are edited live in Admin → Plans (`PATCH /api/v1/admin/plans/:plan`); re-running the setup script leaves existing plans alone unless you pass `--reset-plans`.
 
 There's also a `house` plan — not publicly selectable, admin-assigned only (`PATCH /api/v1/admin/users/:id` with `{ "plan": "house" }`). It's for accounts that shouldn't be billed (e.g. your own infrastructure's own storage use) while still being fully usage-tracked: `base_monthly_usd` and every overage rate are `0`, so it generates a real, auditable $0 invoice every month rather than being silently excluded from billing.
 
@@ -249,7 +251,7 @@ Browser / AWS SDK
 5. Admin can also mark any invoice paid manually
 ```
 
-Invoices are idempotent — generating twice for the same month skips existing records.
+Invoices are idempotent — generating twice for the same month skips existing records. Invoices use each plan's rates as they stand when the invoice is generated, so a rate change in Admin → Plans applies to the month in progress, not just future months.
 
 ## Payments
 
@@ -306,7 +308,11 @@ POST   /api/v1/credentials              Create API key
 DELETE /api/v1/credentials/:id          Revoke API key
 GET    /api/v1/bucket                   Current user's bucket name and region
 GET    /api/v1/files                    List files
-POST   /api/v1/files/upload             Upload file
+POST   /api/v1/files/upload             Upload file (single request; dashboard uses it up to 16 MB)
+POST   /api/v1/files/multipart          Start a chunked upload {filename, prefix, size}
+PUT    /api/v1/files/multipart/:id/parts/:n  Upload one 16 MiB part (raw body)
+POST   /api/v1/files/multipart/:id/complete  Assemble the parts into the file
+DELETE /api/v1/files/multipart/:id      Cancel a chunked upload
 GET    /api/v1/files/download/:key      Download file
 DELETE /api/v1/files/:key               Delete file
 POST   /api/v1/files/mkdir              Create folder
@@ -342,6 +348,12 @@ PATCH  /api/v1/admin/billing/:id          Update invoice status
 POST   /api/v1/admin/billing/:id/comp     Waive an invoice immediately — issues a
                                            matching credit and marks it 'comped'
                                            (distinct from 'paid')
+GET    /api/v1/admin/plans                List plans — limits, rates, user count,
+                                           recent change history
+PATCH  /api/v1/admin/plans/:plan          Edit a plan's limits/rates (partial; money
+                                           in cents, per-GB rates may be fractional).
+                                           Changing storage_gb also resizes existing
+                                           buckets on that plan
 ```
 
 ## Adding More Storage

@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { I } from './Icons';
+import { NavToggle, NavBackdrop } from './MobileNav';
 
 export default function AdminLayout({ title, children }) {
   const { user, logout } = useAuth();
@@ -12,6 +13,7 @@ export default function AdminLayout({ title, children }) {
     { label: 'Nodes',      path: '/admin/nodes',    icon: I.bucket },
     { label: 'Buckets',    path: '/admin/buckets',  icon: I.folder },
     { label: 'Billing',    path: '/admin/billing',  icon: I.card },
+    { label: 'Plans',      path: '/admin/plans',    icon: I.tag },
   ];
 
   return (
@@ -62,8 +64,10 @@ export default function AdminLayout({ title, children }) {
           </button>
         </div>
       </aside>
+      <NavBackdrop />
 
       <header className="topbar">
+        <NavToggle />
         <div className="crumbs">
           <span className="crumb" style={{ color: 'var(--coral)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Admin</span>
           <span className="sep">/</span>

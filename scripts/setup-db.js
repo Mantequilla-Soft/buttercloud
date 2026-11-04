@@ -95,12 +95,15 @@ async function createIndexes() {
 }
 
 async function seedQuotas() {
-  // All monetary values in cents. Transfer = 10x storage (our pattern).
+  // Initial values for new installs only — see the create-only note below.
+  // All monetary values in cents; per-GB rates may be fractional cents
+  // (0.5 = $0.005/GB = $5/TB). Included transfer = 3× storage, and overage is
+  // charged at the plan's own per-TB rate, so going over is never a price cliff.
   const quotas = [
     {
       plan: 'free',
-      storage_gb: 0.5,             // 500 MB
-      monthly_transfer_gb: 5,      // 5 GB (10× storage)
+      storage_gb: 10,              // 10 GB
+      monthly_transfer_gb: 30,     // 30 GB (3× storage)
       monthly_requests: 10000,
       max_object_size_gb: 0.5,     // 500 MB max file
       max_buckets: 1,
@@ -114,14 +117,14 @@ async function seedQuotas() {
     },
     {
       plan: 'starter',
-      storage_gb: 100,             // 100 GB
-      monthly_transfer_gb: 1000,   // 1 TB
+      storage_gb: 1000,            // 1 TB
+      monthly_transfer_gb: 3000,   // 3 TB
       monthly_requests: 100000,
       max_object_size_gb: 5,
       max_buckets: 1,
-      base_monthly_usd: 625,       // $6.25/month
-      storage_overage_per_gb_usd: 38,  // $0.38/GB
-      transfer_overage_per_gb_usd: 10, // $0.10/GB
+      base_monthly_usd: 500,       // $5/month ($5/TB)
+      storage_overage_per_gb_usd: 0.5,   // $5/TB
+      transfer_overage_per_gb_usd: 0.5,  // $5/TB
       request_overage_per_1m_usd: 0,
       supports_replication: false,
       supports_lifecycle_policies: true,
@@ -129,14 +132,14 @@ async function seedQuotas() {
     },
     {
       plan: 'professional',
-      storage_gb: 1000,            // 1 TB
-      monthly_transfer_gb: 10000,  // 10 TB
+      storage_gb: 10000,           // 10 TB
+      monthly_transfer_gb: 30000,  // 30 TB
       monthly_requests: 1000000,
       max_object_size_gb: 10,
       max_buckets: 1,
-      base_monthly_usd: 3749,      // $37.49/month
-      storage_overage_per_gb_usd: 25,  // $0.25/GB
-      transfer_overage_per_gb_usd: 6,  // $0.06/GB
+      base_monthly_usd: 4000,      // $40/month ($4/TB)
+      storage_overage_per_gb_usd: 0.45,  // $4.50/TB
+      transfer_overage_per_gb_usd: 0.4,  // $4/TB
       request_overage_per_1m_usd: 0,
       supports_replication: true,
       supports_lifecycle_policies: true,
@@ -144,14 +147,14 @@ async function seedQuotas() {
     },
     {
       plan: 'enterprise',
-      storage_gb: 10000,           // 10 TB
-      monthly_transfer_gb: 100000, // 100 TB
+      storage_gb: 100000,          // 100 TB
+      monthly_transfer_gb: 300000, // 300 TB
       monthly_requests: 10000000,
       max_object_size_gb: 50,
       max_buckets: 1,
-      base_monthly_usd: 12499,     // $124.99/month
-      storage_overage_per_gb_usd: 13,  // $0.13/GB
-      transfer_overage_per_gb_usd: 3,  // $0.03/GB
+      base_monthly_usd: 35000,     // $350/month ($3.50/TB)
+      storage_overage_per_gb_usd: 0.4,   // $4/TB
+      transfer_overage_per_gb_usd: 0.3,  // $3/TB
       request_overage_per_1m_usd: 0,
       supports_replication: true,
       supports_lifecycle_policies: true,
@@ -179,12 +182,19 @@ async function seedQuotas() {
     },
   ];
 
-  // Upsert — re-running setup-db always applies latest values
+  // Create-only by default: once a plan exists, its rates and limits belong to
+  // the admin dashboard (PATCH /api/v1/admin/plans/:plan), and update.sh re-runs
+  // this script on every deploy — overwriting here would silently revert admin
+  // edits. Pass --reset-plans to force the values below back onto existing plans.
+  const resetPlans = process.argv.includes('--reset-plans');
+
   for (const quotaData of quotas) {
     const existing = await QuotaModel.findByPlan(quotaData.plan);
-    if (existing) {
+    if (existing && resetPlans) {
       await QuotaModel.update(quotaData.plan, quotaData);
-      console.log(`  ↺ Updated ${quotaData.plan} quota plan`);
+      console.log(`  ↺ Reset ${quotaData.plan} quota plan to seed values`);
+    } else if (existing) {
+      console.log(`  ℹ ${quotaData.plan} quota plan exists (left as-is; --reset-plans to overwrite)`);
     } else {
       await QuotaModel.create(quotaData);
       console.log(`  ✓ Seeded ${quotaData.plan} quota plan`);

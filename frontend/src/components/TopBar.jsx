@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getMyBucket } from '../api/usage';
 import { I } from './Icons';
+import { NavToggle } from './MobileNav';
 
 export default function TopBar({ title = 'Dashboard' }) {
   const { user, token } = useAuth();
@@ -22,6 +23,7 @@ export default function TopBar({ title = 'Dashboard' }) {
 
   return (
     <header className="topbar">
+      <NavToggle />
       <div className="crumbs">
         <span className="crumb current">{title}</span>
       </div>
@@ -31,7 +33,7 @@ export default function TopBar({ title = 'Dashboard' }) {
           <button
             onClick={copyBucketName}
             title="Click to copy bucket name"
-            className="mono"
+            className="mono bucket-chip"
             style={{
               display: 'flex', alignItems: 'center', gap: '6px',
               background: 'var(--bg-2)', border: '1px solid var(--line-soft)', borderRadius: '8px',
@@ -40,11 +42,11 @@ export default function TopBar({ title = 'Dashboard' }) {
             }}
           >
             {I.bucket({ size: 14 })}
-            {bucketName}
+            <span className="bucket-chip-name">{bucketName}</span>
             {copied ? '✓' : I.copy({ size: 12 })}
           </button>
         )}
-        <button className="icon-btn">
+        <button className="icon-btn hide-mobile">
           {I.bell({ size: 18 })}
         </button>
         <div className="avatar">{user?.email?.[0].toUpperCase()}</div>

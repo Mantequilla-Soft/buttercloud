@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import Layout from '../../components/Layout';
 import Sidebar from '../../components/Sidebar';
-import TopBar from '../../components/TopBar';
+import { NavToggle, NavBackdrop } from '../../components/MobileNav';
 import { useAuth } from '../../hooks/useAuth';
 import { listFiles, uploadFile, downloadFile, deleteFile } from '../../api/files';
 import { formatBytes, getFileType } from '../../utils/format';
+import { getSharedFiles, clearSharedFiles } from '../../utils/sharedFiles';
 import { I } from '../../components/Icons';
 
 // ─── Detail Rail ────────────────────────────────────────────────────────────
+
+const isTouch = () => window.matchMedia?.('(hover: none)').matches;
 
 const PREVIEW_SIZE_LIMIT = 50 * 1024 * 1024; // auto-fetch up to 50 MB
 
@@ -166,6 +169,7 @@ function NewFolderModal({ prefix, onConfirm, onCancel }) {
       display: 'grid', placeItems: 'center', zIndex: 200,
     }}>
       <form
+        className="modal-card"
         onSubmit={handleSubmit}
         style={{
           background: 'var(--bg-2)', border: '1px solid var(--line-soft)',
@@ -208,7 +212,16 @@ export default function Files() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [noBucket, setNoBucket] = useState(false);
   const [showNewFolder, setShowNewFolder] = useState(false);
+  const [sharedFiles, setSharedFiles] = useState([]);
   const fileInputRef = useRef();
+
+  // Files shared into the installed app from another app (see public/sw.js)
+  useEffect(() => {
+    getSharedFiles().then(setSharedFiles);
+    if (window.location.search.includes('shared=')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -238,6 +251,25 @@ export default function Files() {
     const picked = Array.from(e.target.files || []);
     if (!picked.length) return;
     e.target.value = '';
+    await uploadFiles(picked);
+  }
+
+  async function uploadShared() {
+    const ok = await uploadFiles(sharedFiles);
+    if (ok) {
+      await clearSharedFiles();
+      setSharedFiles([]);
+    }
+  }
+
+  async function discardShared() {
+    await clearSharedFiles();
+    setSharedFiles([]);
+  }
+
+  // Returns true when every file uploaded.
+  async function uploadFiles(picked) {
+    let ok = false;
     setUploading(true);
     setError('');
     try {
@@ -248,6 +280,7 @@ export default function Files() {
           setUploadProgress(p => (p ? { ...p, percent } : p));
         });
       }
+      ok = true;
       await loadFiles();
     } catch (err) {
       setError(err.message);
@@ -255,6 +288,7 @@ export default function Files() {
       setUploading(false);
       setUploadProgress(null);
     }
+    return ok;
   }
 
   async function handleDelete(key) {
@@ -328,9 +362,11 @@ export default function Files() {
   return (
     <div className={`app${showRail ? '' : ' rail-closed'}`}>
       <Sidebar />
+      <NavBackdrop />
 
       {/* Top bar with breadcrumbs + actions */}
       <header className="topbar">
+        <NavToggle />
         <div className="crumbs">
           <span className="crumb">Files</span>
           {breadcrumbs.map((crumb, i) => (
@@ -342,10 +378,10 @@ export default function Files() {
         </div>
         <div className="topbar-actions">
           <button className="btn" onClick={() => setShowNewFolder(true)}>
-            {I.plus({ size: 14 })} New folder
+            {I.plus({ size: 14 })} <span className="btn-label">New folder</span>
           </button>
           <button className="btn primary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            {I.upload({ size: 14 })} {uploading ? 'Uploading…' : 'Upload'}
+            {I.upload({ size: 14 })} <span className="btn-label">{uploading ? 'Uploading…' : 'Upload'}</span>
           </button>
           <input ref={fileInputRef} type="file" multiple onChange={handleUpload} style={{ display: 'none' }} />
         </div>
@@ -356,6 +392,28 @@ export default function Files() {
         {error && (
           <div style={{ padding: '10px 14px', marginBottom: '16px', background: 'oklch(0.72 0.145 25 / .15)', border: '1px solid oklch(0.72 0.145 25 / .4)', borderRadius: '8px', color: 'var(--coral)', fontSize: '13px' }}>
             {error}
+          </div>
+        )}
+
+        {sharedFiles.length > 0 && !uploading && (
+          <div className="share-banner">
+            <div className="share-banner-text">
+              <div style={{ fontWeight: 500, color: 'var(--fg)' }}>
+                {sharedFiles.length === 1 ? '1 file' : `${sharedFiles.length} files`} shared to Butter Cloud
+                <span className="mono" style={{ color: 'var(--fg-2)', fontWeight: 400, marginLeft: '8px', fontSize: '12px' }}>
+                  {formatBytes(sharedFiles.reduce((n, f) => n + f.size, 0))}
+                </span>
+              </div>
+              <div className="share-banner-names">
+                {sharedFiles.map(f => f.name).join(', ')}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+              <button className="btn ghost" onClick={discardShared}>Discard</button>
+              <button className="btn primary" onClick={uploadShared}>
+                {I.upload({ size: 14 })} Upload to /{prefix}
+              </button>
+            </div>
           </div>
         )}
 
@@ -405,7 +463,7 @@ export default function Files() {
 
             {/* Folders */}
             {folders.map(folder => (
-              <div key={folder.key} className="row no-cost" onDoubleClick={() => navigateInto(folder.key)} style={{ cursor: 'default' }}>
+              <div key={folder.key} className="row no-cost" onDoubleClick={() => navigateInto(folder.key)} onClick={() => { if (isTouch()) navigateInto(folder.key); }} style={{ cursor: 'default' }}>
                 <span className="cb" />
                 <div className="ico folder">{I.folder({ size: 13 })}</div>
                 <div className="fname"><span className="name">{folder.name}</span></div>

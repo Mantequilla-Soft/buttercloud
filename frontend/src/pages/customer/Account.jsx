@@ -12,7 +12,7 @@ const PLAN_STYLE = {
 
 function Field({ label, children }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '12px', alignItems: 'start', padding: '14px 0', borderBottom: '1px solid var(--line-soft)' }}>
+    <div className="field-row" style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '12px', alignItems: 'start', padding: '14px 0', borderBottom: '1px solid var(--line-soft)' }}>
       <span style={{ fontSize: '13px', color: 'var(--fg-2)', paddingTop: '1px' }}>{label}</span>
       <span style={{ fontSize: '13px', color: 'var(--fg)' }}>{children}</span>
     </div>

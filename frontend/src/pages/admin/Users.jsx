@@ -39,7 +39,7 @@ export default function Users() {
 
   return (
     <AdminLayout title="Users">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+      <div className="page-hd" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
         <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Users <span style={{ color: 'var(--fg-3)', fontSize: '14px', fontWeight: 400 }}>({total})</span></h1>
         <div style={{ position: 'relative' }}>
           <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-3)' }}>{I.search({ size: 14 })}</span>
@@ -54,7 +54,7 @@ export default function Users() {
 
       {error && <div style={{ padding: '10px 14px', marginBottom: '16px', background: 'oklch(0.72 0.145 25 / .15)', border: '1px solid oklch(0.72 0.145 25 / .4)', borderRadius: '8px', color: 'var(--coral)', fontSize: '13px' }}>{error}</div>}
 
-      <div className="files">
+      <div className="files table-wide">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 80px 80px', gap: '10px', padding: '9px 16px', fontSize: '10.5px', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', borderBottom: '1px solid var(--line-soft)' }}>
           <span>User</span><span>Plan</span><span>Bucket</span><span>Status</span><span></span>
         </div>
