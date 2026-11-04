@@ -5,6 +5,7 @@ import { NavToggle, NavBackdrop } from '../../components/MobileNav';
 import { useAuth } from '../../hooks/useAuth';
 import { listFiles, uploadFile, downloadFile, deleteFile } from '../../api/files';
 import { formatBytes, getFileType } from '../../utils/format';
+import { getSharedFiles, clearSharedFiles } from '../../utils/sharedFiles';
 import { I } from '../../components/Icons';
 
 // ─── Detail Rail ────────────────────────────────────────────────────────────
@@ -211,7 +212,16 @@ export default function Files() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [noBucket, setNoBucket] = useState(false);
   const [showNewFolder, setShowNewFolder] = useState(false);
+  const [sharedFiles, setSharedFiles] = useState([]);
   const fileInputRef = useRef();
+
+  // Files shared into the installed app from another app (see public/sw.js)
+  useEffect(() => {
+    getSharedFiles().then(setSharedFiles);
+    if (window.location.search.includes('shared=')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -241,6 +251,25 @@ export default function Files() {
     const picked = Array.from(e.target.files || []);
     if (!picked.length) return;
     e.target.value = '';
+    await uploadFiles(picked);
+  }
+
+  async function uploadShared() {
+    const ok = await uploadFiles(sharedFiles);
+    if (ok) {
+      await clearSharedFiles();
+      setSharedFiles([]);
+    }
+  }
+
+  async function discardShared() {
+    await clearSharedFiles();
+    setSharedFiles([]);
+  }
+
+  // Returns true when every file uploaded.
+  async function uploadFiles(picked) {
+    let ok = false;
     setUploading(true);
     setError('');
     try {
@@ -251,6 +280,7 @@ export default function Files() {
           setUploadProgress(p => (p ? { ...p, percent } : p));
         });
       }
+      ok = true;
       await loadFiles();
     } catch (err) {
       setError(err.message);
@@ -258,6 +288,7 @@ export default function Files() {
       setUploading(false);
       setUploadProgress(null);
     }
+    return ok;
   }
 
   async function handleDelete(key) {
@@ -361,6 +392,28 @@ export default function Files() {
         {error && (
           <div style={{ padding: '10px 14px', marginBottom: '16px', background: 'oklch(0.72 0.145 25 / .15)', border: '1px solid oklch(0.72 0.145 25 / .4)', borderRadius: '8px', color: 'var(--coral)', fontSize: '13px' }}>
             {error}
+          </div>
+        )}
+
+        {sharedFiles.length > 0 && !uploading && (
+          <div className="share-banner">
+            <div className="share-banner-text">
+              <div style={{ fontWeight: 500, color: 'var(--fg)' }}>
+                {sharedFiles.length === 1 ? '1 file' : `${sharedFiles.length} files`} shared to Butter Cloud
+                <span className="mono" style={{ color: 'var(--fg-2)', fontWeight: 400, marginLeft: '8px', fontSize: '12px' }}>
+                  {formatBytes(sharedFiles.reduce((n, f) => n + f.size, 0))}
+                </span>
+              </div>
+              <div className="share-banner-names">
+                {sharedFiles.map(f => f.name).join(', ')}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+              <button className="btn ghost" onClick={discardShared}>Discard</button>
+              <button className="btn primary" onClick={uploadShared}>
+                {I.upload({ size: 14 })} Upload to /{prefix}
+              </button>
+            </div>
           </div>
         )}
 

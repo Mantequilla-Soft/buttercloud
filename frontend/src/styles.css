@@ -971,3 +971,25 @@ button { font-family: inherit; }
 
   .toast { left: 16px; right: 16px; width: auto; }
 }
+
+/* Files shared into the installed app, waiting to be uploaded */
+.share-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; margin-bottom: 16px;
+  background: oklch(0.85 0.135 90 / .08);
+  border: 1px solid oklch(0.85 0.135 90 / .3);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.share-banner-text { flex: 1 1 220px; min-width: 0; }
+.share-banner-names {
+  margin-top: 2px; font-size: 12px; color: var(--fg-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Installed app: keep content clear of the notch / home indicator */
+@media (display-mode: standalone) {
+  .topbar { padding-top: env(safe-area-inset-top); flex-basis: calc(56px + env(safe-area-inset-top)); }
+  .main { padding-bottom: calc(48px + env(safe-area-inset-bottom)); }
+  .sidebar { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+}

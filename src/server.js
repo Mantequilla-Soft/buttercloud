@@ -89,11 +89,17 @@ export async function createServer() {
       // the current build's content-hashed asset filenames, so a stale cached
       // copy keeps serving an old JS bundle after every deploy. Everything under
       // /assets/ is safe to cache hard: Vite hashes the filename itself, so a
-      // changed file is a new URL, never a mutated one.
+      // changed file is a new URL, never a mutated one. The service worker and
+      // manifest keep stable URLs, so they're revalidated like index.html; other
+      // unhashed root files (icons) get a day.
       setHeaders: (res, path) => {
         res.setHeader(
           'Cache-Control',
-          path.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable'
+          /(index\.html|sw\.js|manifest\.webmanifest)$/.test(path)
+            ? 'no-cache'
+            : path.includes('/assets/')
+              ? 'public, max-age=31536000, immutable'
+              : 'public, max-age=86400'
         );
       },
     });
